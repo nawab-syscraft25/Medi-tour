@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -32,11 +32,11 @@ class Settings(BaseSettings):
         return self.environment == "production"
     
     @property
-    def allowed_image_ext_list(self) -> list[str]:
+    def allowed_image_ext_list(self) -> List[str]:
         return [ext.strip() for ext in self.allowed_image_extensions.split(",")]
     
     @property
-    def allowed_doc_ext_list(self) -> list[str]:
+    def allowed_doc_ext_list(self) -> List[str]:
         return [ext.strip() for ext in self.allowed_doc_extensions.split(",")]
     
     class Config:
