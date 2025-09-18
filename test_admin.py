@@ -9,7 +9,7 @@ import json
 
 async def test_admin_auth():
     """Test admin authentication flow"""
-    base_url = "http://localhost:8000"
+    base_url = "http://165.22.223.163:8000"
     
     async with httpx.AsyncClient(timeout=30.0) as client:
         print("🧪 Testing Admin Authentication...")
@@ -17,7 +17,7 @@ async def test_admin_auth():
         # Test admin login
         login_data = {
             "username": "admin",
-            "password": "admin123"
+            "password": "password123"
         }
         
         response = await client.post(f"{base_url}/api/v1/admin/login", json=login_data)
