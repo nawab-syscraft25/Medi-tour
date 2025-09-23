@@ -7,6 +7,21 @@ from app import models, schemas
 from app.dependencies import get_current_admin
 
 
+def hospital_to_dict(hospital: models.Hospital) -> dict:
+    """Convert Hospital model to dict for safe serialization"""
+    return {
+        "id": hospital.id,
+        "name": hospital.name,
+        "description": hospital.description,
+        "location": hospital.location,
+        "phone": hospital.phone,
+        "features": hospital.features,
+        "facilities": hospital.facilities,
+        "created_at": hospital.created_at,
+        "images": []  # Will be populated separately
+    }
+
+
 def doctor_to_dict(doctor: models.Doctor) -> dict:
     """Convert Doctor model to dict for safe serialization"""
     return {
@@ -23,6 +38,7 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "highlights": doctor.highlights,
         "awards": doctor.awards,
         "created_at": doctor.created_at,
+        "images": []  # Will be populated separately
     }
 
 
@@ -43,6 +59,7 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "other_doctor_name": treatment.other_doctor_name,
         "location": treatment.location,
         "created_at": treatment.created_at,
+        "images": []  # Will be populated separately
     }
 
 router = APIRouter()
@@ -128,8 +145,10 @@ async def create_hospital(
     db_hospital = models.Hospital(**hospital.model_dump())
     db.add(db_hospital)
     await db.commit()
-    await db.refresh(db_hospital)
-    return db_hospital
+    # Fetch fresh copy to get the generated ID without triggering relationships
+    result = await db.execute(select(models.Hospital).where(models.Hospital.id == db_hospital.id))
+    fresh_hospital = result.scalar_one()
+    return hospital_to_dict(fresh_hospital)
 
 
 @router.get("/hospitals", response_model=List[schemas.HospitalResponse])
@@ -157,7 +176,35 @@ async def get_hospitals(
     query = query.offset(skip).limit(limit).order_by(models.Hospital.created_at.desc())
     
     result = await db.execute(query)
-    return result.scalars().all()
+    hospitals = result.scalars().all()
+    
+    # Load images for each hospital within the session
+    hospital_dicts = []
+    for hospital in hospitals:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == hospital.id,
+                    models.Image.owner_type == 'hospital'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        hospital_dict = hospital_to_dict(hospital)
+        hospital_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        hospital_dicts.append(hospital_dict)
+    
+    return hospital_dicts
 
 
 @router.get("/hospitals/{hospital_id}", response_model=schemas.HospitalResponse)
@@ -166,7 +213,7 @@ async def get_hospital(hospital_id: int, db: AsyncSession = Depends(get_db)):
     hospital = result.scalar_one_or_none()
     if not hospital:
         raise HTTPException(status_code=404, detail="Hospital not found")
-    return hospital
+    return hospital_to_dict(hospital)
 
 
 @router.put("/hospitals/{hospital_id}", response_model=schemas.HospitalResponse)
@@ -187,7 +234,7 @@ async def update_hospital(
     
     await db.commit()
     await db.refresh(hospital)
-    return hospital
+    return hospital_to_dict(hospital)
 
 
 @router.delete("/hospitals/{hospital_id}")
@@ -252,7 +299,34 @@ async def get_doctors(
     
     result = await db.execute(query)
     doctors = result.scalars().all()
-    return [doctor_to_dict(doctor) for doctor in doctors]
+    
+    # Load images for each doctor within the session
+    doctor_dicts = []
+    for doctor in doctors:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == doctor.id,
+                    models.Image.owner_type == 'doctor'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        doctor_dict = doctor_to_dict(doctor)
+        doctor_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        doctor_dicts.append(doctor_dict)
+    
+    return doctor_dicts
 
 
 @router.get("/doctors/{doctor_id}", response_model=schemas.DoctorResponse)
@@ -322,6 +396,7 @@ async def get_treatments(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
     treatment_type: Optional[str] = Query(None),
     hospital_id: Optional[int] = Query(None),
     doctor_id: Optional[int] = Query(None),
@@ -338,6 +413,8 @@ async def get_treatments(
             models.Treatment.short_description.ilike(f"%{search}%"),
             models.Treatment.long_description.ilike(f"%{search}%")
         ))
+    if location:
+        filters.append(models.Treatment.location.ilike(f"%{location}%"))
     if treatment_type:
         filters.append(models.Treatment.treatment_type == treatment_type)
     if hospital_id:
@@ -362,7 +439,34 @@ async def get_treatments(
     
     result = await db.execute(query)
     treatments = result.scalars().all()
-    return [treatment_to_dict(treatment) for treatment in treatments]
+    
+    # Load images for each treatment within the session
+    treatment_dicts = []
+    for treatment in treatments:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == treatment.id,
+                    models.Image.owner_type == 'treatment'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        treatment_dict = treatment_to_dict(treatment)
+        treatment_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        treatment_dicts.append(treatment_dict)
+    
+    return treatment_dicts
 
 
 @router.get("/treatments/{treatment_id}", response_model=schemas.TreatmentResponse)

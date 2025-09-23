@@ -1,7 +1,7 @@
 # app/models.py
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Table
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Table, and_
+from sqlalchemy.orm import relationship, declarative_base, foreign
 
 Base = declarative_base()
 
@@ -38,6 +38,9 @@ class Hospital(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     doctors = relationship("Doctor", back_populates="hospital", lazy="noload")
     tours = relationship("Treatment", back_populates="hospital", lazy="noload")
+    images = relationship("Image", 
+                         primaryjoin="and_(Hospital.id == foreign(Image.owner_id), Image.owner_type == 'hospital')",
+                         lazy="select", viewonly=True)
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -56,6 +59,9 @@ class Doctor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="doctors", lazy="noload")
     appointments = relationship("Appointment", back_populates="doctor", lazy="noload")
+    images = relationship("Image", 
+                         primaryjoin="and_(Doctor.id == foreign(Image.owner_id), Image.owner_type == 'doctor')",
+                         lazy="select", viewonly=True)
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -87,6 +93,9 @@ class Treatment(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="tours", lazy="noload")
     doctor = relationship("Doctor", lazy="noload")
+    images = relationship("Image", 
+                         primaryjoin="and_(Treatment.id == foreign(Image.owner_id), Image.owner_type == 'treatment')",
+                         lazy="select", viewonly=True)
 
 class PackageBooking(Base):
     __tablename__ = "package_bookings"

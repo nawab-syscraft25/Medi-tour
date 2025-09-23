@@ -13,6 +13,12 @@ class BaseSchema(BaseModel):
 
 # Image schemas
 class ImageBase(BaseModel):
+    url: str
+    is_primary: bool = False
+    position: Optional[int] = None
+
+
+class ImageCreate(BaseModel):
     owner_type: str
     owner_id: int
     url: str
@@ -20,12 +26,13 @@ class ImageBase(BaseModel):
     position: Optional[int] = None
 
 
-class ImageCreate(ImageBase):
-    pass
-
-
-class ImageResponse(ImageBase, BaseSchema):
+class ImageResponse(BaseSchema):
     id: int
+    owner_type: Optional[str] = None
+    owner_id: Optional[int] = None
+    url: str
+    is_primary: bool = False
+    position: Optional[int] = None
     uploaded_at: datetime
 
 
@@ -87,6 +94,7 @@ class HospitalUpdate(BaseModel):
 class HospitalResponse(HospitalBase, BaseSchema):
     id: int
     created_at: datetime
+    images: List[ImageResponse] = []
     
     @property
     def features_list(self) -> List[str]:
@@ -144,6 +152,7 @@ class DoctorResponse(BaseSchema):
     highlights: Optional[str] = None
     awards: Optional[str] = None
     created_at: datetime
+    images: List[ImageResponse] = []
     
     @property
     def skills_list(self) -> List[str]:
@@ -200,6 +209,7 @@ class TreatmentResponse(BaseSchema):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     created_at: datetime
+    images: List[ImageResponse] = []
 
 
 # Package Booking schemas
