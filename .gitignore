@@ -147,3 +147,6 @@ alembic/versions/*.py
 .history
 
 *.db*
+
+systreack.py
+systreack

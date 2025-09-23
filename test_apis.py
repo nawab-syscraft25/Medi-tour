@@ -11,7 +11,8 @@ async def test_all_apis():
     print("🧪 Testing All APIs with Sample Data...")
     print("=" * 60)
     
-    BASE_URL = "http://127.0.0.1:8001"
+    BASE_URL = "http://127.0.0.1:8000"
+    base_url = "http://127.0.0.1:8000"
     hospitals = []
     doctors = []
     treatments = []

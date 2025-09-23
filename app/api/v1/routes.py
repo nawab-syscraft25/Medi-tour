@@ -553,3 +553,65 @@ async def get_booking(booking_id: int, db: AsyncSession = Depends(get_db)):
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     return booking
+
+
+# Dropdown/Filter Data Endpoints
+@router.get("/filters/locations", response_model=List[str])
+async def get_locations(db: AsyncSession = Depends(get_db)):
+    """Get all unique locations from hospitals and treatments for dropdown"""
+    # Get locations from hospitals
+    hospital_result = await db.execute(
+        select(models.Hospital.location).distinct().where(models.Hospital.location.isnot(None))
+    )
+    hospital_locations = hospital_result.scalars().all()
+    
+    # Get locations from treatments  
+    treatment_result = await db.execute(
+        select(models.Treatment.location).distinct().where(models.Treatment.location.isnot(None))
+    )
+    treatment_locations = treatment_result.scalars().all()
+    
+    # Combine and clean locations
+    all_locations = set()
+    for location in hospital_locations + treatment_locations:
+        if location and location.strip():
+            # Extract city name (everything before the first comma)
+            city = location.split(',')[0].strip()
+            if city:
+                all_locations.add(city)
+    
+    return sorted(list(all_locations))
+
+
+@router.get("/filters/treatment-types", response_model=List[str])
+async def get_treatment_types(db: AsyncSession = Depends(get_db)):
+    """Get all unique treatment types for dropdown"""
+    result = await db.execute(
+        select(models.Treatment.treatment_type).distinct().where(models.Treatment.treatment_type.isnot(None))
+    )
+    treatment_types = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_types = [t.strip() for t in treatment_types if t and t.strip()]
+    return sorted(valid_types)
+
+
+@router.get("/filters/specializations", response_model=List[str])
+async def get_specializations(db: AsyncSession = Depends(get_db)):
+    """Get all unique specializations/skills from doctors for dropdown"""
+    result = await db.execute(
+        select(models.Doctor.skills).distinct().where(models.Doctor.skills.isnot(None))
+    )
+    skills_list = result.scalars().all()
+    
+    # Parse comma-separated skills and create unique list
+    all_specializations = set()
+    for skills in skills_list:
+        if skills and skills.strip():
+            # Split by comma and clean each skill
+            for skill in skills.split(','):
+                skill = skill.strip()
+                if skill:
+                    all_specializations.add(skill)
+    
+    return sorted(list(all_specializations))

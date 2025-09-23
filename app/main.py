@@ -98,6 +98,13 @@ app.include_router(
     prefix="/api/v1"
 )
 
+# Add filter endpoints directly for frontend compatibility
+from app.api.v1.routes import get_locations, get_treatment_types, get_specializations
+
+app.add_api_route("/api/filters/locations", get_locations, methods=["GET"])
+app.add_api_route("/api/filters/treatment-types", get_treatment_types, methods=["GET"])
+app.add_api_route("/api/filters/specializations", get_specializations, methods=["GET"])
+
 
 # Serve static files for local development
 if settings.debug:
