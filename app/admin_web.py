@@ -119,6 +119,17 @@ def get_current_admin_from_session(session_token: Optional[str]) -> Optional[dic
         "is_super_admin": payload.get("is_super_admin", False)
     }
 
+async def get_treatment_types(db: AsyncSession) -> List[str]:
+    """Get all unique treatment types from database"""
+    result = await db.execute(
+        select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+    )
+    treatment_types = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_types = [t.strip() for t in treatment_types if t and t.strip()]
+    return sorted(valid_types)
+
 async def get_current_admin_object(session_token: Optional[str], db: AsyncSession) -> Optional[Admin]:
     """Helper function to get full Admin object from session token"""
     token_data = get_current_admin_from_session(session_token)
@@ -526,6 +537,19 @@ async def mark_all_contacts_read(
     
     return {"message": "All contacts marked as read"}
 
+@router.get("/admin/api/treatment-types")
+async def get_treatment_types_api(
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """API endpoint to get all treatment types"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    treatment_types = await get_treatment_types(db)
+    return {"treatment_types": treatment_types}
+
 # Admin Management (Super Admin only)
 @router.get("/admin/admins", response_class=HTMLResponse)
 async def admin_admins(
@@ -622,12 +646,16 @@ async def admin_treatment_new(
     doctors = await db.execute(select(Doctor).order_by(Doctor.name))
     doctors = doctors.scalars().all()
     
+    # Get treatment types for dropdown
+    treatment_types = await get_treatment_types(db)
+    
     return render_template("admin/treatment_form.html", {
         "request": request,
         "admin": admin,
         "treatment": None,
         "hospitals": hospitals,
         "doctors": doctors,
+        "treatment_types": treatment_types,
         "action": "Create"
     })
 
@@ -655,6 +683,9 @@ async def admin_treatment_edit(
     
     doctors = await db.execute(select(Doctor).order_by(Doctor.name))
     doctors = doctors.scalars().all()
+    
+    # Get treatment types for dropdown
+    treatment_types = await get_treatment_types(db)
 
     # Load treatment images separately to avoid lazy loading in template
     images_result = await db.execute(
@@ -672,6 +703,7 @@ async def admin_treatment_edit(
         "treatment_images": treatment_images,
         "hospitals": hospitals,
         "doctors": doctors,
+        "treatment_types": treatment_types,
         "action": "Update"
     })
 

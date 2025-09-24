@@ -29,18 +29,18 @@
                         </div>
                         <div class="col-md-6">
                             <label for="treatment_type" class="form-label">Treatment Type <span class="text-danger">*</span></label>
-                            <select class="form-select" id="treatment_type" name="treatment_type" required>
-                                <option value="">Select Type</option>
-                                <option value="Surgery" {% if treatment and treatment.treatment_type == 'Surgery' %}selected{% endif %}>Surgery</option>
-                                <option value="Medical" {% if treatment and treatment.treatment_type == 'Medical' %}selected{% endif %}>Medical</option>
-                                <option value="Diagnostic" {% if treatment and treatment.treatment_type == 'Diagnostic' %}selected{% endif %}>Diagnostic</option>
-                                <option value="Therapy" {% if treatment and treatment.treatment_type == 'Therapy' %}selected{% endif %}>Therapy</option>
-                                <option value="Rehabilitation" {% if treatment and treatment.treatment_type == 'Rehabilitation' %}selected{% endif %}>Rehabilitation</option>
-                                <option value="Preventive" {% if treatment and treatment.treatment_type == 'Preventive' %}selected{% endif %}>Preventive</option>
-                                <option value="Cosmetic" {% if treatment and treatment.treatment_type == 'Cosmetic' %}selected{% endif %}>Cosmetic</option>
-                                <option value="Emergency" {% if treatment and treatment.treatment_type == 'Emergency' %}selected{% endif %}>Emergency</option>
-                            </select>
-                            <div class="form-text">Category of treatment</div>
+                            <div class="input-group">
+                                <select class="form-select" id="treatment_type" name="treatment_type" required>
+                                    <option value="">Select Type</option>
+                                    {% for type in treatment_types %}
+                                    <option value="{{ type }}" {% if treatment and treatment.treatment_type == type %}selected{% endif %}>{{ type }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" onclick="showNewTypeModal()" title="Add New Type">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">Category of treatment or add new type</div>
                         </div>
                     </div>
 
@@ -275,6 +275,34 @@
     </div>
 </div>
 
+<!-- New Treatment Type Modal -->
+<div class="modal fade" id="newTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Treatment Type</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newTypeForm">
+                    <div class="mb-3">
+                        <label for="newTypeName" class="form-label">Treatment Type Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newTypeName" name="type_name" required 
+                               placeholder="e.g., Orthopedic Surgery">
+                        <div class="form-text">Enter a unique treatment type name</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewType()">Add Type</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
 // Form enhancement and validation
 document.addEventListener('DOMContentLoaded', function() {
@@ -354,5 +382,100 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Treatment Type Management Functions
+function showNewTypeModal() {
+    document.getElementById('newTypeName').value = '';
+    new bootstrap.Modal(document.getElementById('newTypeModal')).show();
+}
+
+async function addNewType() {
+    const typeName = document.getElementById('newTypeName').value.trim();
+    
+    if (!typeName) {
+        alert('Please enter a treatment type name.');
+        return;
+    }
+    
+    // Check if type already exists in current dropdown
+    const select = document.getElementById('treatment_type');
+    const existingOptions = Array.from(select.options).map(option => option.value.toLowerCase());
+    
+    if (existingOptions.includes(typeName.toLowerCase())) {
+        alert('This treatment type already exists in the current list.');
+        return;
+    }
+    
+    try {
+        // Fetch current types from database to double-check
+        const response = await fetch('/admin/api/treatment-types');
+        const data = await response.json();
+        
+        if (data.treatment_types && data.treatment_types.map(t => t.toLowerCase()).includes(typeName.toLowerCase())) {
+            alert('This treatment type already exists in the database.');
+            return;
+        }
+        
+        // Add new option to select
+        const newOption = document.createElement('option');
+        newOption.value = typeName;
+        newOption.textContent = typeName;
+        newOption.selected = true;
+        
+        // Insert in alphabetical order
+        const options = Array.from(select.options).slice(1); // Skip the first "Select Type" option
+        let inserted = false;
+        
+        for (let i = 0; i < options.length; i++) {
+            if (typeName.toLowerCase() < options[i].value.toLowerCase()) {
+                select.insertBefore(newOption, options[i]);
+                inserted = true;
+                break;
+            }
+        }
+        
+        if (!inserted) {
+            select.appendChild(newOption);
+        }
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('newTypeModal')).hide();
+        
+        // Show success message
+        showSuccessMessage(`New treatment type "${typeName}" has been added locally. It will be saved when you submit the form.`);
+        
+    } catch (error) {
+        console.error('Error checking treatment types:', error);
+        // Still allow adding locally even if API fails
+        const newOption = document.createElement('option');
+        newOption.value = typeName;
+        newOption.textContent = typeName;
+        newOption.selected = true;
+        select.appendChild(newOption);
+        
+        bootstrap.Modal.getInstance(document.getElementById('newTypeModal')).hide();
+        showSuccessMessage(`New treatment type "${typeName}" has been added locally.`);
+    }
+}
+
+function showSuccessMessage(message) {
+    const successMsg = document.createElement('div');
+    successMsg.className = 'alert alert-success alert-dismissible fade show mt-2';
+    successMsg.innerHTML = `
+        <strong>Success!</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insert after the treatment type field
+    const treatmentTypeDiv = document.getElementById('treatment_type').closest('.col-md-6');
+    treatmentTypeDiv.appendChild(successMsg);
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+        if (successMsg && successMsg.parentNode) {
+            successMsg.remove();
+        }
+    }, 5000);
+}
 </script>
 {% endblock %}
