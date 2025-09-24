@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import os
 
@@ -105,6 +106,17 @@ app.add_api_route("/api/filters/locations", get_locations, methods=["GET"])
 app.add_api_route("/api/filters/treatment-types", get_treatment_types, methods=["GET"])
 app.add_api_route("/api/filters/specializations", get_specializations, methods=["GET"])
 
+# Include admin web interface routes
+from app.admin_web import router as admin_router
+
+app.include_router(admin_router)
+
+
+# Configure Jinja2 templates
+templates = Jinja2Templates(directory="templates")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Serve static files for local development
 if settings.debug:

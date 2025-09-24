@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Management - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">Admin Management</h1>
+                    <p class="text-muted">Manage administrator accounts (Super Admin Only)</p>
+                </div>
+                <div>
+                    <a href="/admin/admins/new" class="btn btn-primary me-2">
+                        <i class="fas fa-plus"></i> Add Admin
+                    </a>
+                    <a href="/admin/dashboard" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ admins|length }}</h4>
+                            <p class="card-text">Total Admins</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users-cog fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ admins|selectattr("is_active")|list|length }}</h4>
+                            <p class="card-text">Active Admins</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-user-check fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ admins|selectattr("is_super_admin")|list|length }}</h4>
+                            <p class="card-text">Super Admins</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-crown fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admins Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Administrator Accounts</h5>
+                </div>
+                <div class="card-body">
+                    {% if admins %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Last Login</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for admin_user in admins %}
+                                <tr {% if not admin_user['is_active'] %}class="table-secondary"{% endif %}>
+                                    <td>{{ admin_user['id'] }}</td>
+                                    <td>
+                                        <strong>{{ admin_user['username'] }}</strong>
+                                        {% if admin_user['id'] == admin['id'] %}
+                                        <span class="badge bg-info ms-1">You</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ admin_user['email'] }}</td>
+                                    <td>
+                                        {% if admin_user['is_super_admin'] %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-crown"></i> Super Admin
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Admin</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if admin_user['is_active'] %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Active
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-times"></i> Inactive
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ admin_user['created_at'].strftime("%Y-%m-%d") if admin_user['created_at'] else "N/A" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ admin_user['last_login'].strftime("%Y-%m-%d %H:%M") if admin_user['last_login'] else "Never" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if admin_user['id'] != admin['id'] %}
+                                            <button type="button" class="btn btn-outline-warning" 
+                                                    onclick="toggleAdmin({{ admin_user['id'] }}, '{{ admin_user['username'] }}', {{ admin_user['is_active']|lower }})"
+                                                    title="{% if admin_user['is_active'] %}Deactivate{% else %}Activate{% endif %}">
+                                                {% if admin_user['is_active'] %}
+                                                <i class="fas fa-user-slash"></i>
+                                                {% else %}
+                                                <i class="fas fa-user-check"></i>
+                                                {% endif %}
+                                            </button>
+                                            {% endif %}
+                                            <a href="/admin/admins/{{ admin_user['id'] }}/edit" 
+                                               class="btn btn-outline-primary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% if admin_user['id'] != admin['id'] %}
+                                            <button type="button" class="btn btn-outline-danger" 
+                                                    onclick="confirmDelete({{ admin_user['id'] }}, '{{ admin_user['username'] }}')" 
+                                                    title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-users-cog fa-3x text-muted mb-3"></i>
+                        <h5>No administrators found</h5>
+                        <p class="text-muted">Start by adding your first admin account.</p>
+                        <a href="/admin/admins/new" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add First Admin
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toggle Status Modal -->
+<div class="modal fade" id="toggleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Status Change</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to <span id="toggleAction"></span> the admin "<span id="toggleUsername"></span>"?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="toggleForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-warning" id="toggleButton">Confirm</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the admin "<span id="deleteUsername"></span>"?</p>
+                <p class="text-danger"><small>This action cannot be undone and will permanently remove their access.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Admin</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAdmin(adminId, username, isActive) {
+    const action = isActive ? 'deactivate' : 'activate';
+    document.getElementById('toggleAction').textContent = action;
+    document.getElementById('toggleUsername').textContent = username;
+    document.getElementById('toggleButton').textContent = isActive ? 'Deactivate' : 'Activate';
+    document.getElementById('toggleButton').className = isActive ? 'btn btn-danger' : 'btn btn-success';
+    document.getElementById('toggleForm').action = '/admin/admins/' + adminId + '/toggle-active';
+    new bootstrap.Modal(document.getElementById('toggleModal')).show();
+}
+
+function confirmDelete(adminId, username) {
+    document.getElementById('deleteUsername').textContent = username;
+    document.getElementById('deleteForm').action = '/admin/admins/' + adminId + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

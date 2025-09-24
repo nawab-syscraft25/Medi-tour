@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Treatment Management - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">Treatment Management</h1>
+                    <p class="text-muted">Manage medical treatments and procedures</p>
+                </div>
+                <div>
+                    <a href="/admin/treatments/new" class="btn btn-primary me-2">
+                        <i class="fas fa-plus"></i> Add Treatment
+                    </a>
+                    <a href="/admin/dashboard" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">{{ total }}</h4>
+                            <p class="card-text">Total Treatments</p>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-procedures fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Treatments Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">All Treatments</h5>
+                </div>
+                <div class="card-body">
+                    {% if treatments %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Price</th>
+                                    <th>Location</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for treatment in treatments %}
+                                <tr>
+                                    <td>{{ treatment.id }}</td>
+                                    <td>
+                                        <strong>{{ treatment.name }}</strong>
+                                        {% if treatment.treatment_type %}
+                                        <br><small class="text-muted"><i class="fas fa-tag"></i> {{ treatment.treatment_type }}</small>
+                                        {% endif %}
+                                        {% if treatment.hospital %}
+                                        <br><small class="text-primary"><i class="fas fa-hospital"></i> {{ treatment.hospital.name }}</small>
+                                        {% elif treatment.other_hospital_name %}
+                                        <br><small class="text-primary"><i class="fas fa-hospital"></i> {{ treatment.other_hospital_name }}</small>
+                                        {% endif %}
+                                        {% if treatment.doctor %}
+                                        <br><small class="text-success"><i class="fas fa-user-md"></i> Dr. {{ treatment.doctor.name }}</small>
+                                        {% elif treatment.other_doctor_name %}
+                                        <br><small class="text-success"><i class="fas fa-user-md"></i> Dr. {{ treatment.other_doctor_name }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if treatment.short_description %}
+                                        <span class="text-truncate" style="max-width: 200px; display: inline-block;" 
+                                              title="{{ treatment.short_description }}">
+                                            {{ treatment.short_description[:100] }}{% if treatment.short_description|length > 100 %}...{% endif %}
+                                        </span>
+                                        {% else %}
+                                        <em class="text-muted">No description</em>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if treatment.price_exact %}
+                                        <span class="badge bg-success">${{ "%.2f"|format(treatment.price_exact) }}</span>
+                                        {% elif treatment.price_min and treatment.price_max %}
+                                        <span class="badge bg-info">${{ "%.2f"|format(treatment.price_min) }} - ${{ "%.2f"|format(treatment.price_max) }}</span>
+                                        {% elif treatment.price_min %}
+                                        <span class="badge bg-info">From ${{ "%.2f"|format(treatment.price_min) }}</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Price on request</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if treatment.location %}
+                                        {{ treatment.location }}
+                                        {% else %}
+                                        <em class="text-muted">Location not specified</em>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ treatment.created_at.strftime("%Y-%m-%d") if treatment.created_at else "N/A" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="/admin/treatments/{{ treatment.id }}/edit" 
+                                               class="btn btn-outline-primary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger" 
+                                                    onclick="confirmDelete({{ treatment.id }}, '{{ treatment.name }}')" 
+                                                    title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav aria-label="Treatments pagination" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="/admin/treatments?page={{ page - 1 }}">Previous</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for p in range(1, total_pages + 1) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="/admin/treatments?page={{ p }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            {% if page < total_pages %}
+                            <li class="page-item">
+                                <a class="page-link" href="/admin/treatments?page={{ page + 1 }}">Next</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-procedures fa-3x text-muted mb-3"></i>
+                        <h5>No treatments found</h5>
+                        <p class="text-muted">Start by adding your first treatment.</p>
+                        <a href="/admin/treatments/new" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add First Treatment
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the treatment "<span id="treatmentName"></span>"?</p>
+                <p class="text-danger"><small>This action cannot be undone.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Treatment</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDelete(treatmentId, treatmentName) {
+    document.getElementById('treatmentName').textContent = treatmentName;
+    document.getElementById('deleteForm').action = '/admin/treatments/' + treatmentId + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

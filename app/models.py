@@ -32,9 +32,17 @@ class Hospital(Base):
     name = Column(String(300), nullable=False, index=True)
     description = Column(Text, nullable=True)
     location = Column(String(500), nullable=True)
+    address = Column(Text, nullable=True)
     phone = Column(String(80), nullable=True)
+    email = Column(String(300), nullable=True)
+    website = Column(String(500), nullable=True)
+    established_year = Column(Integer, nullable=True)
+    bed_count = Column(Integer, nullable=True)
+    specializations = Column(Text, nullable=True)  # comma-separated
+    rating = Column(Float, nullable=True)
     features = Column(Text, nullable=True)    # comma-separated one-liners
     facilities = Column(Text, nullable=True)  # comma-separated keywords
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     doctors = relationship("Doctor", back_populates="hospital", lazy="noload")
     tours = relationship("Treatment", back_populates="hospital", lazy="noload")
@@ -49,13 +57,17 @@ class Doctor(Base):
     profile_photo = Column(String(1000), nullable=True)
     description = Column(Text, nullable=True)
     designation = Column(String(200), nullable=True)
+    specialization = Column(String(200), nullable=True)  # single main specialization
+    qualification = Column(String(500), nullable=True)   # main qualification
     experience_years = Column(Integer, nullable=True)
+    rating = Column(Float, nullable=True)
     hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)
     gender = Column(String(20), nullable=True)
     skills = Column(Text, nullable=True)           # comma-separated
-    qualifications = Column(Text, nullable=True)
+    qualifications = Column(Text, nullable=True)   # detailed qualifications
     highlights = Column(Text, nullable=True)
     awards = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="doctors", lazy="noload")
     appointments = relationship("Appointment", back_populates="doctor", lazy="noload")

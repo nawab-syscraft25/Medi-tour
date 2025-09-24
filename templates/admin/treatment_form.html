@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Treatment - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-procedures"></i> {{ action }} Treatment</h2>
+    <a href="/admin/treatments" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Treatments
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Treatment Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/admin/treatments{% if treatment %}/{{ treatment.id }}{% endif %}" enctype="multipart/form-data">
+                    <!-- Basic Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Treatment Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ treatment.name if treatment else '' }}" required
+                                   placeholder="Cardiac Bypass Surgery">
+                            <div class="form-text">Full treatment name</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="treatment_type" class="form-label">Treatment Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="treatment_type" name="treatment_type" required>
+                                <option value="">Select Type</option>
+                                <option value="Surgery" {% if treatment and treatment.treatment_type == 'Surgery' %}selected{% endif %}>Surgery</option>
+                                <option value="Medical" {% if treatment and treatment.treatment_type == 'Medical' %}selected{% endif %}>Medical</option>
+                                <option value="Diagnostic" {% if treatment and treatment.treatment_type == 'Diagnostic' %}selected{% endif %}>Diagnostic</option>
+                                <option value="Therapy" {% if treatment and treatment.treatment_type == 'Therapy' %}selected{% endif %}>Therapy</option>
+                                <option value="Rehabilitation" {% if treatment and treatment.treatment_type == 'Rehabilitation' %}selected{% endif %}>Rehabilitation</option>
+                                <option value="Preventive" {% if treatment and treatment.treatment_type == 'Preventive' %}selected{% endif %}>Preventive</option>
+                                <option value="Cosmetic" {% if treatment and treatment.treatment_type == 'Cosmetic' %}selected{% endif %}>Cosmetic</option>
+                                <option value="Emergency" {% if treatment and treatment.treatment_type == 'Emergency' %}selected{% endif %}>Emergency</option>
+                            </select>
+                            <div class="form-text">Category of treatment</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="short_description" class="form-label">Short Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="short_description" name="short_description" rows="2" required
+                                  placeholder="Brief overview of the treatment procedure...">{{ treatment.short_description if treatment else '' }}</textarea>
+                        <div class="form-text">Brief summary for listings (max 200 characters)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="long_description" class="form-label">Detailed Description</label>
+                        <textarea class="form-control" id="long_description" name="long_description" rows="6"
+                                  placeholder="Comprehensive description including procedure details, benefits, risks, recovery time...">{{ treatment.long_description if treatment else '' }}</textarea>
+                        <div class="form-text">Comprehensive treatment information</div>
+                    </div>
+
+                    <!-- Location & Provider -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-map-marker-alt"></i> Location & Provider
+                    </h5>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="location" class="form-label">Location <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="location" name="location" 
+                                   value="{{ treatment.location if treatment else '' }}" required
+                                   placeholder="City, State, Country">
+                            <div class="form-text">Treatment location</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="hospital_id" class="form-label">Hospital</label>
+                            <select class="form-select" id="hospital_id" name="hospital_id">
+                                <option value="">Select Hospital</option>
+                                {% for hospital in hospitals %}
+                                <option value="{{ hospital.id }}" 
+                                        {% if treatment and treatment.hospital_id == hospital.id %}selected{% endif %}>
+                                    {{ hospital.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Primary hospital (if applicable)</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="other_hospital_name" class="form-label">Other Hospital Name</label>
+                            <input type="text" class="form-control" id="other_hospital_name" name="other_hospital_name" 
+                                   value="{{ treatment.other_hospital_name if treatment else '' }}" 
+                                   placeholder="Enter hospital name if not in list">
+                            <div class="form-text">If hospital not in dropdown list</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="doctor_id" class="form-label">Doctor</label>
+                            <select class="form-select" id="doctor_id" name="doctor_id">
+                                <option value="">Select Doctor</option>
+                                {% for doctor in doctors %}
+                                <option value="{{ doctor.id }}" 
+                                        {% if treatment and treatment.doctor_id == doctor.id %}selected{% endif %}>
+                                    {{ doctor.name }} - {{ doctor.designation }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Primary doctor (if applicable)</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="other_doctor_name" class="form-label">Other Doctor Name</label>
+                        <input type="text" class="form-control" id="other_doctor_name" name="other_doctor_name" 
+                               value="{{ treatment.other_doctor_name if treatment else '' }}" 
+                               placeholder="Enter doctor name if not in list">
+                        <div class="form-text">If doctor not in dropdown list</div>
+                    </div>
+
+                    <!-- Pricing Information -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-dollar-sign"></i> Pricing Information
+                    </h5>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="price_type" id="price_range" value="range" 
+                                       {% if treatment and (treatment.price_min or treatment.price_max) %}checked{% endif %}>
+                                <label class="form-check-label" for="price_range">
+                                    Price Range
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="price_type" id="price_exact_radio" value="exact"
+                                       {% if treatment and treatment.price_exact %}checked{% endif %}>
+                                <label class="form-check-label" for="price_exact_radio">
+                                    Exact Price
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3" id="price_range_fields">
+                        <div class="col-md-6">
+                            <label for="price_min" class="form-label">Minimum Price ($)</label>
+                            <input type="number" class="form-control" id="price_min" name="price_min" 
+                                   value="{{ treatment.price_min if treatment else '' }}" min="0" step="0.01"
+                                   placeholder="1000.00">
+                            <div class="form-text">Starting price range</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="price_max" class="form-label">Maximum Price ($)</label>
+                            <input type="number" class="form-control" id="price_max" name="price_max" 
+                                   value="{{ treatment.price_max if treatment else '' }}" min="0" step="0.01"
+                                   placeholder="5000.00">
+                            <div class="form-text">Maximum price range</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3" id="price_exact_field">
+                        <div class="col-md-6">
+                            <label for="price_exact" class="form-label">Exact Price ($)</label>
+                            <input type="number" class="form-control" id="price_exact" name="price_exact" 
+                                   value="{{ treatment.price_exact if treatment else '' }}" min="0" step="0.01"
+                                   placeholder="2500.00">
+                            <div class="form-text">Fixed treatment price</div>
+                        </div>
+                    </div>
+
+                    <!-- Images & Media -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-images"></i> Treatment Images
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="images" class="form-label">Upload Images</label>
+                        <input type="file" class="form-control" id="images" name="images" multiple accept="image/*">
+                        <div class="form-text">Upload procedure images, before/after photos, equipment images, etc.</div>
+                    </div>
+
+                    {% if treatment and treatment_images %}
+                    <div class="mb-3">
+                        <label class="form-label">Current Images</label>
+                        <div class="row">
+                            {% for image in treatment_images %}
+                            <div class="col-md-3 mb-2">
+                                <div class="card">
+                                    <img src="{{ image.url }}" class="card-img-top" style="height: 150px; object-fit: cover;">
+                                    <div class="card-body p-2">
+                                        <small class="text-muted">
+                                            {% if image.is_primary %}<i class="fas fa-star text-warning"></i> Primary{% endif %}
+                                            Position: {{ image.position }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="/admin/treatments" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Treatment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-info-circle"></i> Help & Guidelines</h6>
+            </div>
+            <div class="card-body">
+                <h6>Required Fields</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-check text-success"></i> Treatment Name</li>
+                    <li><i class="fas fa-check text-success"></i> Treatment Type</li>
+                    <li><i class="fas fa-check text-success"></i> Short Description</li>
+                    <li><i class="fas fa-check text-success"></i> Location</li>
+                </ul>
+
+                <h6 class="mt-3">Pricing Guidelines</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-info text-info"></i> Use price range for variable costs</li>
+                    <li><i class="fas fa-info text-info"></i> Use exact price for fixed procedures</li>
+                    <li><i class="fas fa-info text-info"></i> Include all associated costs</li>
+                    <li><i class="fas fa-info text-info"></i> Update prices regularly</li>
+                </ul>
+
+                <h6 class="mt-3">Content Tips</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-lightbulb text-warning"></i> Use clear, medical terminology</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Include benefits and risks</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Mention recovery time</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Add pre/post procedure care</li>
+                </ul>
+
+                <h6 class="mt-3">Image Guidelines</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-camera text-info"></i> Professional medical images</li>
+                    <li><i class="fas fa-camera text-info"></i> Before/after comparisons</li>
+                    <li><i class="fas fa-camera text-info"></i> Equipment and facility photos</li>
+                    <li><i class="fas fa-camera text-info"></i> Maintain patient privacy</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Treatment Types Info -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-list"></i> Treatment Types</h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    <strong>Surgery:</strong> Operative procedures<br>
+                    <strong>Medical:</strong> Non-surgical treatments<br>
+                    <strong>Diagnostic:</strong> Tests and examinations<br>
+                    <strong>Therapy:</strong> Rehabilitation services<br>
+                    <strong>Preventive:</strong> Health maintenance<br>
+                    <strong>Cosmetic:</strong> Aesthetic procedures<br>
+                    <strong>Emergency:</strong> Urgent care
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form enhancement and validation
+document.addEventListener('DOMContentLoaded', function() {
+    // Price type toggle
+    const priceRangeRadio = document.getElementById('price_range');
+    const priceExactRadio = document.getElementById('price_exact_radio');
+    const priceRangeFields = document.getElementById('price_range_fields');
+    const priceExactField = document.getElementById('price_exact_field');
+
+    function togglePriceFields() {
+        if (priceRangeRadio.checked) {
+            priceRangeFields.style.display = 'flex';
+            priceExactField.style.display = 'none';
+            document.getElementById('price_exact').value = '';
+        } else if (priceExactRadio.checked) {
+            priceRangeFields.style.display = 'none';
+            priceExactField.style.display = 'flex';
+            document.getElementById('price_min').value = '';
+            document.getElementById('price_max').value = '';
+        }
+    }
+
+    priceRangeRadio.addEventListener('change', togglePriceFields);
+    priceExactRadio.addEventListener('change', togglePriceFields);
+
+    // Initial toggle
+    togglePriceFields();
+
+    // Character count for short description
+    const shortDescInput = document.getElementById('short_description');
+    shortDescInput.addEventListener('input', function() {
+        const length = this.value.length;
+        const helpText = this.nextElementSibling;
+        helpText.textContent = `${length}/200 characters - Brief summary for listings`;
+        
+        if (length > 200) {
+            this.classList.add('is-invalid');
+        } else {
+            this.classList.remove('is-invalid');
+        }
+    });
+
+    // Hospital/Doctor dropdown dependencies
+    const hospitalSelect = document.getElementById('hospital_id');
+    const doctorSelect = document.getElementById('doctor_id');
+    
+    hospitalSelect.addEventListener('change', function() {
+        if (this.value) {
+            // Filter doctors based on selected hospital
+            // This would require AJAX call to get doctors for specific hospital
+        }
+    });
+
+    // Price validation
+    const priceMinInput = document.getElementById('price_min');
+    const priceMaxInput = document.getElementById('price_max');
+    
+    priceMinInput.addEventListener('input', function() {
+        const minVal = parseFloat(this.value);
+        const maxVal = parseFloat(priceMaxInput.value);
+        
+        if (maxVal && minVal && minVal > maxVal) {
+            this.setCustomValidity('Minimum price cannot be greater than maximum price');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+
+    priceMaxInput.addEventListener('input', function() {
+        const minVal = parseFloat(priceMinInput.value);
+        const maxVal = parseFloat(this.value);
+        
+        if (minVal && maxVal && maxVal < minVal) {
+            this.setCustomValidity('Maximum price cannot be less than minimum price');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+});
+</script>
+{% endblock %}

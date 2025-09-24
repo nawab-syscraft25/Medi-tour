@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Hospital - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-hospital"></i> {{ action }} Hospital</h2>
+    <a href="/admin/hospitals" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Hospitals
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Hospital Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/admin/hospitals{% if hospital %}/{{ hospital.id }}{% endif %}" enctype="multipart/form-data">
+                    <!-- Basic Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Hospital Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ hospital.name if hospital else '' }}" required
+                                   placeholder="Central Medical Hospital">
+                            <div class="form-text">Enter the full hospital name</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="phone" class="form-label">Phone Number</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" 
+                                   value="{{ hospital.phone if hospital else '' }}"
+                                   placeholder="+1-555-0123">
+                            <div class="form-text">Primary contact number</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ hospital.email if hospital else '' }}"
+                                   placeholder="info@hospital.com">
+                            <div class="form-text">Primary email address</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="location" class="form-label">Location <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="location" name="location" 
+                                   value="{{ hospital.location if hospital else '' }}" required
+                                   placeholder="New York, NY, USA">
+                            <div class="form-text">City, State, Country</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Full Address</label>
+                        <textarea class="form-control" id="address" name="address" rows="2"
+                                  placeholder="123 Medical Center Drive, Suite 100">{{ hospital.address if hospital else '' }}</textarea>
+                        <div class="form-text">Complete street address</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4"
+                                  placeholder="Brief description of the hospital, its mission, and key services...">{{ hospital.description if hospital else '' }}</textarea>
+                        <div class="form-text">Hospital overview and key information</div>
+                    </div>
+
+                    <!-- Rating -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="rating" class="form-label">Hospital Rating</label>
+                            <select class="form-select" id="rating" name="rating">
+                                <option value="">Select Rating</option>
+                                {% for i in range(1, 6) %}
+                                <option value="{{ i }}" {% if hospital and hospital.rating == i %}selected{% endif %}>
+                                    {{ i }} Star{% if i > 1 %}s{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Overall hospital rating (1-5 stars)</div>
+                        </div>
+                    </div>
+
+                    <!-- Specializations -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-user-md"></i> Medical Specializations
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="specializations" class="form-label">Specializations</label>
+                        <input type="text" class="form-control" id="specializations" name="specializations"
+                               value="{{ hospital.specializations if hospital and hospital.specializations else '' }}"
+                               placeholder="Cardiology, Oncology, Neurology, Orthopedics">
+                        <div class="form-text">Separate multiple specializations with commas</div>
+                    </div>
+
+                    <!-- Features & Facilities -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-building"></i> Features & Facilities
+                    </h5>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="features" class="form-label">Hospital Features</label>
+                            <textarea class="form-control" id="features" name="features" rows="4"
+                                      placeholder="24/7 Emergency, ICU, Surgery Center, Pharmacy">{{ hospital.features if hospital and hospital.features else '' }}</textarea>
+                            <div class="form-text">Separate multiple features with commas</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="facilities" class="form-label">Available Facilities</label>
+                            <textarea class="form-control" id="facilities" name="facilities" rows="4"
+                                      placeholder="Parking, Cafeteria, WiFi, Chapel, Gift Shop">{{ hospital.facilities if hospital and hospital.facilities else '' }}</textarea>
+                            <div class="form-text">Separate multiple facilities with commas</div>
+                        </div>
+                    </div>
+
+                    <!-- Images -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-images"></i> Hospital Images
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="images" class="form-label">Upload Images</label>
+                        <input type="file" class="form-control" id="images" name="images" multiple accept="image/*">
+                        <div class="form-text">Upload multiple images of the hospital</div>
+                    </div>
+
+                    {% if hospital and hospital_images %}
+                    <div class="mb-3">
+                        <label class="form-label">Current Images</label>
+                        <div class="row">
+                            {% for image in hospital_images %}
+                            <div class="col-md-3 mb-2">
+                                <img src="{{ image.url }}" class="img-fluid rounded" style="height: 150px; object-fit: cover;">
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="/admin/hospitals" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Hospital
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-info-circle"></i> Help & Guidelines</h6>
+            </div>
+            <div class="card-body">
+                <h6>Required Fields</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-check text-success"></i> Hospital Name</li>
+                    <li><i class="fas fa-check text-success"></i> Location</li>
+                </ul>
+
+                <h6 class="mt-3">Format Examples</h6>
+                <small class="text-muted">
+                    <strong>Specializations:</strong><br>
+                    Cardiology, Oncology, Neurology<br><br>
+                    
+                    <strong>Features:</strong><br>
+                    24/7 Emergency, ICU, Laboratory<br><br>
+                    
+                    <strong>Facilities:</strong><br>
+                    Parking, Cafeteria, WiFi
+                </small>
+
+                <h6 class="mt-3">Tips</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-lightbulb text-warning"></i> Use high-quality images</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Keep descriptions clear and informative</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Update contact information regularly</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form validation and enhancement
+document.addEventListener('DOMContentLoaded', function() {
+    // Form submission validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        let isValid = true;
+        
+        // Validate required fields
+        const requiredFields = ['name', 'location'];
+        requiredFields.forEach(fieldName => {
+            const field = document.getElementById(fieldName);
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        if (!isValid) {
+            e.preventDefault();
+            alert('Please correct the errors in the form before submitting.');
+        }
+    });
+
+    // Add visual feedback for comma-separated fields
+    const arrayFields = ['specializations', 'features', 'facilities'];
+    arrayFields.forEach(fieldName => {
+        const field = document.getElementById(fieldName);
+        if (field) {
+            field.addEventListener('input', function() {
+                // Count items for visual feedback
+                const items = this.value.split(',').filter(item => item.trim().length > 0);
+                const helpText = this.nextElementSibling;
+                if (items.length > 1) {
+                    helpText.textContent = `${items.length} items - Separate multiple values with commas`;
+                } else if (items.length === 1) {
+                    helpText.textContent = `1 item - Separate multiple values with commas`;
+                } else {
+                    helpText.textContent = `Separate multiple values with commas`;
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

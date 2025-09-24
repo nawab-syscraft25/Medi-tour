@@ -1,0 +1,27 @@
+name: medi-tour-api
+services:
+- name: api
+  source_dir: /
+  github:
+    repo: your-username/medi-tour
+    branch: main
+  run_command: uvicorn app.main:app --host 0.0.0.0 --port 8080
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 8080
+  envs:
+  - key: DATABASE_URL
+    value: ${db.DATABASE_URL}
+  - key: SECRET_KEY
+    value: your-secret-key
+  - key: DEBUG
+    value: "false"
+  - key: ENVIRONMENT
+    value: production
+
+databases:
+- name: db
+  engine: PG
+  version: "14"
+  size: basic-xs

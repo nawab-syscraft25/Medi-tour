@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Doctor - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-user-md"></i> {{ action }} Doctor</h2>
+    <a href="/admin/doctors" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Doctors
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Doctor Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/admin/doctors{% if doctor %}/{{ doctor.id }}{% endif %}" enctype="multipart/form-data">
+                    <!-- Basic Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Doctor Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ doctor.name if doctor else '' }}" required
+                                   placeholder="Dr. John Smith">
+                            <div class="form-text">Full name with title (Dr./Prof.)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="designation" class="form-label">Designation <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="designation" name="designation" 
+                                   value="{{ doctor.designation if doctor else '' }}" required
+                                   placeholder="Senior Cardiologist">
+                            <div class="form-text">Professional designation/title</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="hospital_id" class="form-label">Hospital <span class="text-danger">*</span></label>
+                            <select class="form-select" id="hospital_id" name="hospital_id" required>
+                                <option value="">Select Hospital</option>
+                                {% for hospital in hospitals %}
+                                <option value="{{ hospital.id }}" 
+                                        {% if doctor and doctor.hospital_id == hospital.id %}selected{% endif %}>
+                                    {{ hospital.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Primary hospital affiliation</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="experience_years" class="form-label">Experience (Years)</label>
+                            <input type="number" class="form-control" id="experience_years" name="experience_years" 
+                                   value="{{ doctor.experience_years if doctor else '' }}" min="0" max="50"
+                                   placeholder="10">
+                            <div class="form-text">Years of practice</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="gender" class="form-label">Gender</label>
+                            <select class="form-select" id="gender" name="gender">
+                                <option value="">Select Gender</option>
+                                <option value="Male" {% if doctor and doctor.gender == 'Male' %}selected{% endif %}>Male</option>
+                                <option value="Female" {% if doctor and doctor.gender == 'Female' %}selected{% endif %}>Female</option>
+                                <option value="Other" {% if doctor and doctor.gender == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                            <div class="form-text">Doctor's gender</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="description" name="description" rows="4" required
+                                  placeholder="Brief biography, expertise, and approach to patient care...">{{ doctor.description if doctor else '' }}</textarea>
+                        <div class="form-text">Professional biography and expertise summary</div>
+                    </div>
+
+                    <!-- Professional Details -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-graduation-cap"></i> Professional Details
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="specialization" class="form-label">Specialization</label>
+                        <input type="text" class="form-control" id="specialization" name="specialization" 
+                               value="{{ doctor.specialization if doctor else '' }}" 
+                               placeholder="Interventional Cardiology">
+                        <div class="form-text">Primary medical specialization</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="skills" class="form-label">Skills & Expertise</label>
+                        <textarea class="form-control" id="skills" name="skills" rows="3"
+                                  placeholder="Heart Surgery, Angioplasty, Cardiac Catheterization, Echocardiography...">{{ doctor.skills if doctor and doctor.skills else '' }}</textarea>
+                        <div class="form-text">List key skills and areas of expertise (comma-separated)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="qualifications" class="form-label">Qualifications</label>
+                        <textarea class="form-control" id="qualifications" name="qualifications" rows="3"
+                                  placeholder="MBBS, MD (Cardiology), DM (Interventional Cardiology), Fellowship in Cardiac Surgery...">{{ doctor.qualifications if doctor and doctor.qualifications else '' }}</textarea>
+                        <div class="form-text">Educational qualifications and certifications</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="qualification" class="form-label">Primary Qualification</label>
+                            <input type="text" class="form-control" id="qualification" name="qualification" 
+                                   value="{{ doctor.qualification if doctor else '' }}" 
+                                   placeholder="MD, MBBS">
+                            <div class="form-text">Primary medical degree</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rating" class="form-label">Rating</label>
+                            <select class="form-select" id="rating" name="rating">
+                                <option value="">Select Rating</option>
+                                {% for i in range(1, 6) %}
+                                <option value="{{ i }}" {% if doctor and doctor.rating == i %}selected{% endif %}>
+                                    {{ i }} Star{{ 's' if i > 1 else '' }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Doctor rating (1-5 stars)</div>
+                        </div>
+                    </div>
+
+                    <!-- Achievements & Recognition -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-trophy"></i> Achievements & Recognition
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="highlights" class="form-label">Professional Highlights</label>
+                        <textarea class="form-control" id="highlights" name="highlights" rows="3"
+                                  placeholder="500+ successful surgeries, Pioneer in minimally invasive techniques, Published 20+ research papers...">{{ doctor.highlights if doctor and doctor.highlights else '' }}</textarea>
+                        <div class="form-text">Key achievements and notable accomplishments</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="awards" class="form-label">Awards & Recognition</label>
+                        <textarea class="form-control" id="awards" name="awards" rows="3"
+                                  placeholder="Best Doctor Award 2023, Excellence in Patient Care, Outstanding Research Contribution...">{{ doctor.awards if doctor and doctor.awards else '' }}</textarea>
+                        <div class="form-text">Awards, honors, and recognitions received</div>
+                    </div>
+
+                    <!-- Media & Images -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-camera"></i> Profile Media
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="profile_photo" class="form-label">Profile Photo</label>
+                        <input type="file" class="form-control" id="profile_photo" name="profile_photo" accept="image/*">
+                        <div class="form-text">Professional headshot photo</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="images" class="form-label">Additional Images</label>
+                        <input type="file" class="form-control" id="images" name="images" multiple accept="image/*">
+                        <div class="form-text">Additional professional photos, certifications, etc.</div>
+                    </div>
+
+                    {% if doctor and doctor.profile_photo %}
+                    <div class="mb-3">
+                        <label class="form-label">Current Profile Photo</label>
+                        <div>
+                            <img src="{{ doctor.profile_photo }}" alt="Profile Photo" class="img-thumbnail" style="width: 150px; height: 150px; object-fit: cover;">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="/admin/doctors" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Doctor
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-info-circle"></i> Help & Guidelines</h6>
+            </div>
+            <div class="card-body">
+                <h6>Required Fields</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-check text-success"></i> Doctor Name</li>
+                    <li><i class="fas fa-check text-success"></i> Designation</li>
+                    <li><i class="fas fa-check text-success"></i> Hospital</li>
+                    <li><i class="fas fa-check text-success"></i> Description</li>
+                </ul>
+
+                <h6 class="mt-3">Tips for Better Profiles</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-lightbulb text-warning"></i> Use professional titles (Dr./Prof.)</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Include specific specializations</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> List all qualifications</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Highlight key achievements</li>
+                    <li><i class="fas fa-lightbulb text-warning"></i> Use high-quality profile photos</li>
+                </ul>
+
+                <h6 class="mt-3">Photo Guidelines</h6>
+                <ul class="list-unstyled small">
+                    <li><i class="fas fa-camera text-info"></i> Professional headshot preferred</li>
+                    <li><i class="fas fa-camera text-info"></i> Good lighting and resolution</li>
+                    <li><i class="fas fa-camera text-info"></i> Formal attire recommended</li>
+                    <li><i class="fas fa-camera text-info"></i> Clear, uncluttered background</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Statistics Card -->
+        {% if action == "Update" and doctor %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-chart-bar"></i> Doctor Statistics</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h5 class="text-primary mb-0">{{ doctor.treatments|length if doctor.treatments else 0 }}</h5>
+                        <small class="text-muted">Treatments</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-success mb-0">{{ doctor.experience_years or 0 }}</h5>
+                        <small class="text-muted">Years Exp.</small>
+                    </div>
+                </div>
+                <hr>
+                <small class="text-muted">
+                    <i class="fas fa-calendar"></i> Created: {{ doctor.created_at.strftime("%B %d, %Y") }}
+                </small>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Form validation and enhancement
+document.addEventListener('DOMContentLoaded', function() {
+    // Character count for description
+    const descriptionInput = document.getElementById('description');
+    const descriptionHelp = descriptionInput.nextElementSibling;
+    
+    descriptionInput.addEventListener('input', function() {
+        const length = this.value.length;
+        descriptionHelp.textContent = `${length}/500 characters - Professional biography and expertise summary`;
+        
+        if (length > 500) {
+            this.classList.add('is-invalid');
+        } else {
+            this.classList.remove('is-invalid');
+        }
+    });
+
+    // Image preview for profile photo
+    const profilePhotoInput = document.getElementById('profile_photo');
+    profilePhotoInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                alert('Profile photo must be less than 5MB');
+                this.value = '';
+            }
+        }
+    });
+
+    // Experience years validation
+    const experienceInput = document.getElementById('experience_years');
+    experienceInput.addEventListener('input', function() {
+        if (this.value < 0) this.value = 0;
+        if (this.value > 50) this.value = 50;
+    });
+});
+</script>
+{% endblock %}
