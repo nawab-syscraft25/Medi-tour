@@ -60,6 +60,7 @@
                                     <th>Name</th>
                                     <th>Description</th>
                                     <th>Price</th>
+                                    <th>Rating</th>
                                     <th>Location</th>
                                     <th>Created</th>
                                     <th>Actions</th>
@@ -107,6 +108,26 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% if treatment.rating %}
+                                            <div class="d-flex align-items-center">
+                                                <span class="me-1">{{ "%.1f"|format(treatment.rating) }}</span>
+                                                <div class="text-warning">
+                                                    {% for i in range(5) %}
+                                                        {% if i < treatment.rating %}
+                                                            <i class="fas fa-star"></i>
+                                                        {% elif i < treatment.rating + 0.5 %}
+                                                            <i class="fas fa-star-half-alt"></i>
+                                                        {% else %}
+                                                            <i class="far fa-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">No rating</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         {% if treatment.location %}
                                         {{ treatment.location }}
                                         {% else %}
@@ -124,8 +145,9 @@
                                                class="btn btn-outline-primary" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    onclick="confirmDelete({{ treatment.id }}, '{{ treatment.name }}')" 
+                                            <button type="button" class="btn btn-outline-danger delete-btn" 
+                                                    data-treatment-id="{{ treatment.id }}" 
+                                                    data-treatment-name="{{ treatment.name }}"
                                                     title="Delete">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -186,24 +208,57 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete the treatment "<span id="treatmentName"></span>"?</p>
+                <p>Are you sure you want to delete this treatment?</p>
+                <p><strong id="treatmentName"></strong></p>
                 <p class="text-danger"><small>This action cannot be undone.</small></p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form id="deleteForm" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">Delete Treatment</button>
-                </form>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete Treatment</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-function confirmDelete(treatmentId, treatmentName) {
-    document.getElementById('treatmentName').textContent = treatmentName;
-    document.getElementById('deleteForm').action = '/admin/treatments/' + treatmentId + '/delete';
-    new bootstrap.Modal(document.getElementById('deleteModal')).show();
-}
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle delete button clicks
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const treatmentId = this.getAttribute('data-treatment-id');
+            const treatmentName = this.getAttribute('data-treatment-name');
+            
+            document.getElementById('treatmentName').textContent = treatmentName;
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+            
+            document.getElementById('confirmDeleteBtn').onclick = async function() {
+                try {
+                    const response = await fetch(`/admin/treatments/${treatmentId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        modal.hide();
+                        alert(`${treatmentName} has been deleted successfully.`);
+                        location.reload();
+                    } else {
+                        modal.hide();
+                        alert(`Error deleting ${treatmentName}: ${data.detail || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    modal.hide();
+                    alert(`Error deleting ${treatmentName}: ${error.message}`);
+                }
+            };
+        });
+    });
+});
 </script>
 {% endblock %}

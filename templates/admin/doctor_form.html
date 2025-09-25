@@ -69,6 +69,22 @@
                         </div>
                     </div>
 
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="rating" class="form-label">Rating</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="rating" name="rating" 
+                                       value="{{ doctor.rating if doctor else '' }}" 
+                                       min="1" max="5" step="0.1" 
+                                       placeholder="4.5">
+                                <span class="input-group-text">
+                                    <i class="fas fa-star text-warning"></i>
+                                </span>
+                            </div>
+                            <div class="form-text">Rating from 1.0 to 5.0 stars</div>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="description" name="description" rows="4" required

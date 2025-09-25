@@ -20,12 +20,30 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer
 from app.auth import verify_password
 from app.core.config import settings
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+# Add custom Jinja2 filters
+def nl2br(value):
+    """Convert newlines to <br> tags"""
+    if not value:
+        return value
+    return value.replace('\n', '<br>').replace('\r\n', '<br>')
+
+def linebreaks(value):
+    """Convert newlines to <br> tags and wrap in paragraphs if needed"""
+    if not value:
+        return value
+    # Replace newlines with <br> tags
+    return value.replace('\n', '<br>').replace('\r\n', '<br>')
+
+# Register the filter
+templates.env.filters['nl2br'] = nl2br
+templates.env.filters['linebreaks'] = linebreaks
 
 def render_template(name: str, context: dict):
     """Helper function to render templates with common context"""
@@ -168,6 +186,7 @@ async def get_dashboard_stats(db: AsyncSession):
     stats["hospitals"] = await db.scalar(select(func.count(Hospital.id)))
     stats["doctors"] = await db.scalar(select(func.count(Doctor.id)))
     stats["treatments"] = await db.scalar(select(func.count(Treatment.id)))
+    stats["offers"] = await db.scalar(select(func.count(Offer.id)))
     stats["contacts"] = await db.scalar(select(func.count(Contact.id)))
     stats["admins"] = await db.scalar(select(func.count(Admin.id)))
     stats["images"] = await db.scalar(select(func.count(Image.id)))
@@ -416,6 +435,82 @@ async def admin_treatments(
         "total": total
     })
 
+# Offers Management (Attractions / Discount Packages)
+@router.get("/admin/offers", response_class=HTMLResponse)
+async def admin_offers(
+    request: Request,
+    page: int = 1,
+    search: Optional[str] = None,
+    filter_type: Optional[str] = None,
+    filter_location: Optional[str] = None,
+    filter_status: Optional[str] = None,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Admin offers listing page with filtering and search"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    limit = 20
+    offset = (page - 1) * limit
+    
+    # Build query with filters
+    query = select(Offer).options(selectinload(Offer.treatment))
+    
+    # Apply search filter
+    if search:
+        query = query.where(
+            Offer.name.ilike(f"%{search}%") |
+            Offer.description.ilike(f"%{search}%")
+        )
+    
+    # Apply type filter
+    if filter_type:
+        query = query.where(Offer.treatment_type == filter_type)
+    
+    # Apply location filter
+    if filter_location:
+        query = query.where(Offer.location.ilike(f"%{filter_location}%"))
+    
+    # Apply status filter
+    if filter_status == "active":
+        query = query.where(Offer.is_active == True, Offer.end_date > datetime.utcnow())
+    elif filter_status == "expired":
+        query = query.where(Offer.end_date <= datetime.utcnow())
+    elif filter_status == "inactive":
+        query = query.where(Offer.is_active == False)
+    
+    # Get total count for pagination
+    total_result = await db.execute(select(func.count(Offer.id)).select_from(query.subquery()))
+    total = total_result.scalar()
+    total_pages = (total + limit - 1) // limit
+    
+    # Get offers with pagination
+    query = query.order_by(desc(Offer.created_at)).offset(offset).limit(limit)
+    result = await db.execute(query)
+    offers = result.scalars().all()
+    
+    # Get unique treatment types for filter dropdown
+    treatment_types_result = await db.execute(
+        select(Offer.treatment_type).distinct().where(Offer.treatment_type.isnot(None))
+    )
+    treatment_types = [t for t in treatment_types_result.scalars().all() if t]
+    
+    return render_template("admin/offers.html", {
+        "request": request,
+        "admin": admin,
+        "offers": offers,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "search": search,
+        "filter_type": filter_type,
+        "filter_location": filter_location,
+        "filter_status": filter_status,
+        "treatment_types": treatment_types
+    })
+
 # Contact Management
 @router.get("/admin/contacts", response_class=HTMLResponse)
 async def admin_contacts(
@@ -520,6 +615,187 @@ async def delete_contact(
     
     return {"message": "Contact deleted successfully"}
 
+@router.delete("/admin/hospitals/{hospital_id}")
+async def delete_hospital(
+    hospital_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a hospital"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    hospital = await db.get(Hospital, hospital_id)
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital not found")
+    
+    # Delete associated images first
+    await db.execute(
+        select(Image).where(
+            Image.owner_type == "hospital",
+            Image.owner_id == hospital_id
+        )
+    )
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "hospital",
+            Image.owner_id == hospital_id
+        )
+    )
+    images = images_result.scalars().all()
+    for image in images:
+        await db.delete(image)
+    
+    await db.delete(hospital)
+    await db.commit()
+    
+    return {"message": "Hospital deleted successfully"}
+
+@router.get("/admin/hospitals/{hospital_id}/details")
+async def get_hospital_details(
+    hospital_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get hospital details for modal display"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Get hospital with related data
+    result = await db.execute(
+        select(Hospital).options(
+            selectinload(Hospital.doctors),
+            selectinload(Hospital.treatments)
+        ).where(Hospital.id == hospital_id)
+    )
+    hospital = result.scalar_one_or_none()
+    
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital not found")
+    
+    # Get hospital images
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "hospital",
+            Image.owner_id == hospital_id
+        ).order_by(Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    return {
+        "id": hospital.id,
+        "name": hospital.name,
+        "description": hospital.description,
+        "location": hospital.location,
+        "address": hospital.address,
+        "phone": hospital.phone,
+        "email": hospital.email,
+        "features": hospital.features,
+        "facilities": hospital.facilities,
+        "specializations": hospital.specializations,
+        "rating": hospital.rating,
+        "is_active": hospital.is_active,
+        "created_at": hospital.created_at,
+        "images": [{"id": img.id, "url": img.url, "is_primary": img.is_primary} for img in images],
+        "doctors_count": len(hospital.doctors) if hospital.doctors else 0,
+        "treatments_count": len(hospital.treatments) if hospital.treatments else 0
+    }
+
+@router.delete("/admin/doctors/{doctor_id}")
+async def delete_doctor(
+    doctor_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a doctor"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    doctor = await db.get(Doctor, doctor_id)
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    
+    # Delete associated images first
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "doctor",
+            Image.owner_id == doctor_id
+        )
+    )
+    images = images_result.scalars().all()
+    for image in images:
+        await db.delete(image)
+    
+    await db.delete(doctor)
+    await db.commit()
+    
+    return {"message": "Doctor deleted successfully"}
+
+@router.delete("/admin/treatments/{treatment_id}")
+async def delete_treatment(
+    treatment_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a treatment"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    treatment = await db.get(Treatment, treatment_id)
+    if not treatment:
+        raise HTTPException(status_code=404, detail="Treatment not found")
+    
+    # Delete associated images first
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "treatment",
+            Image.owner_id == treatment_id
+        )
+    )
+    images = images_result.scalars().all()
+    for image in images:
+        await db.delete(image)
+    
+    await db.delete(treatment)
+    await db.commit()
+    
+    return {"message": "Treatment deleted successfully"}
+
+@router.delete("/admin/offers/{offer_id}")
+async def delete_offer(
+    offer_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an offer"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    offer = await db.get(Offer, offer_id)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    # Delete associated images first
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "offer",
+            Image.owner_id == offer_id
+        )
+    )
+    images = images_result.scalars().all()
+    for image in images:
+        await db.delete(image)
+    
+    await db.delete(offer)
+    await db.commit()
+    
+    return {"message": "Offer deleted successfully"}
+
 @router.post("/admin/contacts/mark-all-read")
 async def mark_all_contacts_read(
     session_token: Optional[str] = Cookie(None),
@@ -573,6 +849,203 @@ async def admin_admins(
         "admin": admin,
         "admins": admins
     })
+
+@router.get("/admin/admins/new", response_class=HTMLResponse)
+async def admin_new_admin(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New admin form (Super Admin only)"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin or not admin.get('is_super_admin'):
+        return RedirectResponse(url="/admin/dashboard", status_code=302)
+    
+    return render_template("admin/admin_form.html", {
+        "request": request,
+        "admin": admin,
+        "admin_user": None,
+        "action": "Create"
+    })
+
+@router.get("/admin/admins/{admin_id}/edit", response_class=HTMLResponse)
+async def admin_edit_admin(
+    request: Request,
+    admin_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit admin form (Super Admin only)"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin or not admin.get('is_super_admin'):
+        return RedirectResponse(url="/admin/dashboard", status_code=302)
+    
+    result = await db.execute(select(Admin).where(Admin.id == admin_id))
+    admin_user = result.scalar_one_or_none()
+    
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    return render_template("admin/admin_form.html", {
+        "request": request,
+        "admin": admin,
+        "admin_user": admin_user,
+        "action": "Update"
+    })
+
+@router.post("/admin/admins/new")
+async def admin_create_admin(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    is_super_admin: bool = Form(False),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new admin (Super Admin only)"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin or not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super admin privileges required")
+    
+    try:
+        # Check if username or email already exists
+        existing_admin = await db.execute(
+            select(Admin).where(
+                (Admin.username == username) | (Admin.email == email)
+            )
+        )
+        if existing_admin.scalar_one_or_none():
+            return render_template("admin/admin_form.html", {
+                "request": request,
+                "admin": await get_current_admin_dict(session_token, db),
+                "admin_user": None,
+                "action": "Create",
+                "error": "Username or email already exists"
+            })
+        
+        # Hash password
+        from app.auth import get_password_hash
+        hashed_password = get_password_hash(password)
+        
+        # Create new admin
+        new_admin = Admin(
+            username=username,
+            email=email,
+            hashed_password=hashed_password,
+            is_super_admin=is_super_admin,
+            is_active=True
+        )
+        
+        db.add(new_admin)
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/admins", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        return render_template("admin/admin_form.html", {
+            "request": request,
+            "admin": await get_current_admin_dict(session_token, db),
+            "admin_user": None,
+            "action": "Create",
+            "error": f"Error creating admin: {str(e)}"
+        })
+
+@router.post("/admin/admins/{admin_id}/edit")
+async def admin_update_admin(
+    request: Request,
+    admin_id: int,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(None),
+    is_super_admin: bool = Form(False),
+    is_active: bool = Form(True),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update admin (Super Admin only)"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin or not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super admin privileges required")
+    
+    try:
+        admin_user = await db.get(Admin, admin_id)
+        if not admin_user:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        
+        # Check if username or email already exists (excluding current admin)
+        existing_admin = await db.execute(
+            select(Admin).where(
+                ((Admin.username == username) | (Admin.email == email)) &
+                (Admin.id != admin_id)
+            )
+        )
+        if existing_admin.scalar_one_or_none():
+            return render_template("admin/admin_form.html", {
+                "request": request,
+                "admin": await get_current_admin_dict(session_token, db),
+                "admin_user": admin_user,
+                "action": "Update",
+                "error": "Username or email already exists"
+            })
+        
+        # Update admin fields
+        admin_user.username = username
+        admin_user.email = email
+        admin_user.is_super_admin = is_super_admin
+        admin_user.is_active = is_active
+        
+        # Update password if provided
+        if password and password.strip():
+            from app.auth import get_password_hash
+            admin_user.hashed_password = get_password_hash(password)
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/admins", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        return render_template("admin/admin_form.html", {
+            "request": request,
+            "admin": await get_current_admin_dict(session_token, db),
+            "admin_user": admin_user,
+            "action": "Update",
+            "error": f"Error updating admin: {str(e)}"
+        })
+
+@router.delete("/admin/admins/{admin_id}")
+async def admin_delete_admin(
+    admin_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete admin (Super Admin only)"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin or not admin.is_super_admin:
+        raise HTTPException(status_code=403, detail="Super admin privileges required")
+    
+    admin_user = await db.get(Admin, admin_id)
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    # Prevent deleting self
+    if admin_user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    # Prevent deleting the last super admin
+    if admin_user.is_super_admin:
+        super_admin_count = await db.scalar(
+            select(func.count(Admin.id)).where(Admin.is_super_admin == True)
+        )
+        if super_admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last super admin")
+    
+    await db.delete(admin_user)
+    await db.commit()
+    
+    return {"message": "Admin deleted successfully"}
 
 # Additional form routes for doctors and treatments
 @router.get("/admin/doctors/new", response_class=HTMLResponse)
@@ -703,6 +1176,83 @@ async def admin_treatment_edit(
         "treatment_images": treatment_images,
         "hospitals": hospitals,
         "doctors": doctors,
+        "treatment_types": treatment_types,
+        "action": "Update"
+    })
+
+@router.get("/admin/offers/new", response_class=HTMLResponse)
+async def admin_offer_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New offer form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get treatments for dropdown
+    treatments = await db.execute(select(Treatment).order_by(Treatment.name))
+    treatments = treatments.scalars().all()
+    
+    # Get unique treatment types for dropdown
+    treatment_types_result = await db.execute(
+        select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+    )
+    treatment_types = [t for t in treatment_types_result.scalars().all() if t]
+    
+    return render_template("admin/offer_form.html", {
+        "request": request,
+        "admin": admin,
+        "offer": None,
+        "treatments": treatments,
+        "treatment_types": treatment_types,
+        "action": "Create"
+    })
+
+@router.get("/admin/offers/{offer_id}/edit", response_class=HTMLResponse)
+async def admin_offer_edit(
+    request: Request,
+    offer_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit offer form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    result = await db.execute(select(Offer).where(Offer.id == offer_id))
+    offer = result.scalar_one_or_none()
+    
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    # Get treatments for dropdown
+    treatments = await db.execute(select(Treatment).order_by(Treatment.name))
+    treatments = treatments.scalars().all()
+    
+    # Get unique treatment types for dropdown
+    treatment_types_result = await db.execute(
+        select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+    )
+    treatment_types = [t for t in treatment_types_result.scalars().all() if t]
+    
+    # Load offer images separately to avoid lazy loading in template
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "offer",
+            Image.owner_id == offer.id
+        ).order_by(Image.position, Image.id)
+    )
+    offer_images = images_result.scalars().all()
+    
+    return render_template("admin/offer_form.html", {
+        "request": request,
+        "admin": admin,
+        "offer": offer,
+        "offer_images": offer_images,
+        "treatments": treatments,
         "treatment_types": treatment_types,
         "action": "Update"
     })
@@ -900,6 +1450,7 @@ async def admin_doctor_create(
     designation: str = Form(""),
     hospital_id: Optional[int] = Form(None),
     experience_years: Optional[int] = Form(None),
+    rating: Optional[float] = Form(None),
     gender: str = Form(""),
     description: str = Form(""),
     specialization: str = Form(""),
@@ -932,6 +1483,7 @@ async def admin_doctor_create(
             designation=designation or None,
             hospital_id=hospital_id,
             experience_years=experience_years,
+            rating=rating,
             gender=gender or None,
             description=description or None,
             specialization=specialization or None,
@@ -988,6 +1540,7 @@ async def admin_doctor_update(
     designation: str = Form(""),
     hospital_id: Optional[int] = Form(None),
     experience_years: Optional[int] = Form(None),
+    rating: Optional[float] = Form(None),
     gender: str = Form(""),
     description: str = Form(""),
     specialization: str = Form(""),
@@ -1023,6 +1576,7 @@ async def admin_doctor_update(
         doctor.designation = designation or None
         doctor.hospital_id = hospital_id
         doctor.experience_years = experience_years
+        doctor.rating = rating
         doctor.gender = gender or None
         doctor.description = description or None
         doctor.specialization = specialization or None
@@ -1083,6 +1637,7 @@ async def admin_treatment_create(
     price_min: Optional[float] = Form(None),
     price_max: Optional[float] = Form(None),
     price_exact: Optional[float] = Form(None),
+    rating: Optional[float] = Form(None),
     hospital_id: Optional[int] = Form(None),
     other_hospital_name: str = Form(""),
     doctor_id: Optional[int] = Form(None),
@@ -1107,6 +1662,7 @@ async def admin_treatment_create(
             price_min=price_min,
             price_max=price_max,
             price_exact=price_exact,
+            rating=rating,
             hospital_id=hospital_id,
             other_hospital_name=other_hospital_name or None,
             doctor_id=doctor_id,
@@ -1166,6 +1722,7 @@ async def admin_treatment_update(
     price_min: Optional[float] = Form(None),
     price_max: Optional[float] = Form(None),
     price_exact: Optional[float] = Form(None),
+    rating: Optional[float] = Form(None),
     hospital_id: Optional[int] = Form(None),
     other_hospital_name: str = Form(""),
     doctor_id: Optional[int] = Form(None),
@@ -1196,6 +1753,7 @@ async def admin_treatment_update(
         treatment.price_min = price_min
         treatment.price_max = price_max
         treatment.price_exact = price_exact
+        treatment.rating = rating
         treatment.hospital_id = hospital_id
         treatment.other_hospital_name = other_hospital_name or None
         treatment.doctor_id = doctor_id
@@ -1243,4 +1801,185 @@ async def admin_treatment_update(
             "doctors": doctors,
             "action": "Update",
             "error": f"Error updating treatment: {str(e)}"
+        })
+
+# Offer CRUD Operations
+@router.post("/admin/offers")
+async def admin_offer_create(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(...),
+    treatment_type: str = Form(""),
+    location: str = Form(""),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    discount_percentage: Optional[float] = Form(None),
+    is_free_camp: Optional[str] = Form(None),
+    treatment_id: Optional[int] = Form(None),
+    is_active: Optional[str] = Form(None),
+    images: List[UploadFile] = File(default=[]),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new offer"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Parse dates
+        start_datetime = datetime.fromisoformat(start_date.replace('Z', '+00:00')) if start_date else None
+        end_datetime = datetime.fromisoformat(end_date.replace('Z', '+00:00')) if end_date else None
+        
+        # Create offer object
+        offer = Offer(
+            name=name,
+            description=description,
+            treatment_type=treatment_type or None,
+            location=location or None,
+            start_date=start_datetime,
+            end_date=end_datetime,
+            discount_percentage=discount_percentage,
+            is_free_camp=bool(is_free_camp),
+            treatment_id=treatment_id,
+            is_active=bool(is_active) if is_active is not None else True,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        
+        db.add(offer)
+        await db.flush()  # Get offer ID
+        
+        # Handle image uploads
+        image_count = 0
+        for image_file in images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "offer")
+                if filename:
+                    image = Image(
+                        owner_type="offer",
+                        owner_id=offer.id,
+                        url=f"/media/offer/{filename}",
+                        is_primary=image_count == 0,
+                        position=image_count
+                    )
+                    db.add(image)
+                    image_count += 1
+        
+        await db.commit()
+        return RedirectResponse(url="/admin/offers", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        # Get data for form
+        treatments = await db.execute(select(Treatment).order_by(Treatment.name))
+        treatments = treatments.scalars().all()
+        treatment_types_result = await db.execute(
+            select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+        )
+        treatment_types = [t for t in treatment_types_result.scalars().all() if t]
+        
+        return render_template("admin/offer_form.html", {
+            "request": request,
+            "admin": admin,
+            "offer": None,
+            "treatments": treatments,
+            "treatment_types": treatment_types,
+            "action": "Create",
+            "error": f"Error creating offer: {str(e)}"
+        })
+
+@router.post("/admin/offers/{offer_id}")
+async def admin_offer_update(
+    request: Request,
+    offer_id: int,
+    name: str = Form(...),
+    description: str = Form(...),
+    treatment_type: str = Form(""),
+    location: str = Form(""),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    discount_percentage: Optional[float] = Form(None),
+    is_free_camp: Optional[str] = Form(None),
+    treatment_id: Optional[int] = Form(None),
+    is_active: Optional[str] = Form(None),
+    images: List[UploadFile] = File(default=[]),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update existing offer"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing offer
+        result = await db.execute(select(Offer).where(Offer.id == offer_id))
+        offer = result.scalar_one_or_none()
+        
+        if not offer:
+            raise HTTPException(status_code=404, detail="Offer not found")
+        
+        # Parse dates
+        start_datetime = datetime.fromisoformat(start_date.replace('Z', '+00:00')) if start_date else None
+        end_datetime = datetime.fromisoformat(end_date.replace('Z', '+00:00')) if end_date else None
+        
+        # Update offer fields
+        offer.name = name
+        offer.description = description
+        offer.treatment_type = treatment_type or None
+        offer.location = location or None
+        offer.start_date = start_datetime
+        offer.end_date = end_datetime
+        offer.discount_percentage = discount_percentage
+        offer.is_free_camp = bool(is_free_camp)
+        offer.treatment_id = treatment_id
+        offer.is_active = bool(is_active) if is_active is not None else True
+        offer.updated_at = datetime.now()
+        
+        # Handle new image uploads
+        # Get current image count for this offer
+        existing_images_result = await db.execute(
+            select(func.count(Image.id)).where(
+                Image.owner_type == "offer",
+                Image.owner_id == offer.id
+            )
+        )
+        image_count = existing_images_result.scalar() or 0
+        
+        for image_file in images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "offer")
+                if filename:
+                    image = Image(
+                        owner_type="offer",
+                        owner_id=offer.id,
+                        url=f"/media/offer/{filename}",
+                        is_primary=image_count == 0,
+                        position=image_count
+                    )
+                    db.add(image)
+                    image_count += 1
+        
+        await db.commit()
+        return RedirectResponse(url="/admin/offers", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        # Get data for form
+        treatments = await db.execute(select(Treatment).order_by(Treatment.name))
+        treatments = treatments.scalars().all()
+        treatment_types_result = await db.execute(
+            select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+        )
+        treatment_types = [t for t in treatment_types_result.scalars().all() if t]
+        
+        return render_template("admin/offer_form.html", {
+            "request": request,
+            "admin": admin,
+            "offer": offer,
+            "treatments": treatments,
+            "treatment_types": treatment_types,
+            "action": "Update",
+            "error": f"Error updating offer: {str(e)}"
         })

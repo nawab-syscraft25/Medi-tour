@@ -213,7 +213,30 @@ async def get_hospital(hospital_id: int, db: AsyncSession = Depends(get_db)):
     hospital = result.scalar_one_or_none()
     if not hospital:
         raise HTTPException(status_code=404, detail="Hospital not found")
-    return hospital_to_dict(hospital)
+    
+    # Load images for the hospital within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == hospital.id,
+                models.Image.owner_type == 'hospital'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    hospital_dict = hospital_to_dict(hospital)
+    hospital_dict['images'] = [
+        {
+            "id": img.id,
+            "url": img.url,
+            "is_primary": img.is_primary,
+            "position": img.position,
+            "uploaded_at": img.uploaded_at
+        } for img in images
+    ]
+    
+    return hospital_dict
 
 
 @router.put("/hospitals/{hospital_id}", response_model=schemas.HospitalResponse)
@@ -335,7 +358,30 @@ async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
-    return doctor_to_dict(doctor)
+    
+    # Load images for the doctor within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == doctor.id,
+                models.Image.owner_type == 'doctor'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    doctor_dict = doctor_to_dict(doctor)
+    doctor_dict['images'] = [
+        {
+            "id": img.id,
+            "url": img.url,
+            "is_primary": img.is_primary,
+            "position": img.position,
+            "uploaded_at": img.uploaded_at
+        } for img in images
+    ]
+    
+    return doctor_dict
 
 
 @router.put("/doctors/{doctor_id}", response_model=schemas.DoctorResponse)
@@ -475,7 +521,30 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
     treatment = result.scalar_one_or_none()
     if not treatment:
         raise HTTPException(status_code=404, detail="Treatment not found")
-    return treatment_to_dict(treatment)
+    
+    # Load images for the treatment within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == treatment.id,
+                models.Image.owner_type == 'treatment'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    treatment_dict = treatment_to_dict(treatment)
+    treatment_dict['images'] = [
+        {
+            "id": img.id,
+            "url": img.url,
+            "is_primary": img.is_primary,
+            "position": img.position,
+            "uploaded_at": img.uploaded_at
+        } for img in images
+    ]
+    
+    return treatment_dict
 
 
 @router.put("/treatments/{treatment_id}", response_model=schemas.TreatmentResponse)

@@ -137,9 +137,11 @@
                                     <i class="fas fa-eye"></i>
                                 </button>
                                 <button type="button" 
-                                        class="btn btn-outline-danger" 
+                                        class="btn btn-outline-danger delete-btn" 
                                         title="Delete"
-                                        onclick="confirmDelete('doctor', {{ doctor.id }}, 'Dr. {{ doctor.name }}')">
+                                        data-type="doctor"
+                                        data-id="{{ doctor.id }}"
+                                        data-name="Dr. {{ doctor.name }}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -228,13 +230,37 @@ function viewDoctorDetails(doctorId) {
 }
 
 // Delete confirmation
-function confirmDelete(type, id, name) {
-    if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
-        console.log(`Deleting ${type} with ID: ${id}`);
-        // Implementation would make AJAX call to delete
-        alert(`${name} has been deleted successfully.`);
-        location.reload();
-    }
-}
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const type = this.getAttribute('data-type');
+            const id = this.getAttribute('data-id');
+            const name = this.getAttribute('data-name');
+            
+            if (confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+                try {
+                    const response = await fetch(`/admin/${type}s/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        alert(`${name} has been deleted successfully.`);
+                        location.reload();
+                    } else {
+                        alert(`Error deleting ${name}: ${data.detail || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert(`Error deleting ${name}: ${error.message}`);
+                }
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

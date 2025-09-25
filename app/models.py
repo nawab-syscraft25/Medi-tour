@@ -8,7 +8,7 @@ Base = declarative_base()
 class Image(Base):
     __tablename__ = "images"
     id = Column(Integer, primary_key=True, index=True)
-    owner_type = Column(String(50), nullable=False)  # "hospital","doctor","treatment","slider"
+    owner_type = Column(String(50), nullable=False)  # "hospital","doctor","treatment","slider","offer"
     owner_id = Column(Integer, nullable=False)
     url = Column(String(1000), nullable=False)
     is_primary = Column(Boolean, default=False)
@@ -97,6 +97,7 @@ class Treatment(Base):
     price_min = Column(Float, nullable=True)
     price_max = Column(Float, nullable=True)
     price_exact = Column(Float, nullable=True)
+    rating = Column(Float, nullable=True)
     hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)
     other_hospital_name = Column(String(300), nullable=True)
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="SET NULL"), nullable=True)
@@ -149,3 +150,26 @@ class ContactUs(Base):
     admin_response = Column(Text, nullable=True)
     responded_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Offer(Base):
+    __tablename__ = "offers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(300), nullable=False, index=True)  # Offer Name/Title
+    description = Column(Text, nullable=False)  # Full Description
+    treatment_type = Column(String(100), nullable=True, index=True)  # Type of Treatment
+    location = Column(String(500), nullable=True, index=True)  # Location (city or hospital/clinic)
+    start_date = Column(DateTime, nullable=False, index=True)  # Start Date
+    end_date = Column(DateTime, nullable=False, index=True)  # End Date
+    discount_percentage = Column(Float, nullable=True)  # Discount Percentage (0-100)
+    is_free_camp = Column(Boolean, default=False)  # Free Camp Flag
+    treatment_id = Column(Integer, ForeignKey("treatments.id", ondelete="SET NULL"), nullable=True)  # Link to treatment
+    is_active = Column(Boolean, default=True)  # Active status
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    treatment = relationship("Treatment", lazy="noload")
+    images = relationship("Image", 
+                         primaryjoin="and_(Offer.id == foreign(Image.owner_id), Image.owner_type == 'offer')",
+                         lazy="select", viewonly=True)

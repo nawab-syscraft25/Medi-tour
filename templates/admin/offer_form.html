@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Offer - Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-gift text-warning"></i> {{ action }} Offer
+        <small class="text-muted">(Attractions / Discount Packages)</small>
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="/admin/offers" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Offers
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle"></i> Offer Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" 
+                      action="{% if offer %}/admin/offers/{{ offer.id }}{% else %}/admin/offers{% endif %}">
+                    
+                    <!-- Basic Information -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-edit"></i> Basic Information
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Offer Name/Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               value="{{ offer.name if offer else '' }}" 
+                               placeholder="e.g., 20% Off Breast Cancer Treatment">
+                        <div class="form-text">Clear, descriptive name for the offer</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Full Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="description" name="description" rows="4" required
+                                  placeholder="Detailed description of the offer, terms, and conditions...">{{ offer.description if offer else '' }}</textarea>
+                        <div class="form-text">Complete details about the offer and what it includes</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="treatment_type" class="form-label">Treatment Type</label>
+                            <select class="form-select" id="treatment_type" name="treatment_type">
+                                <option value="">Select Treatment Type (Optional)</option>
+                                {% for type in treatment_types %}
+                                <option value="{{ type }}" {% if offer and offer.treatment_type == type %}selected{% endif %}>
+                                    {{ type }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Category of medical treatment</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="location" class="form-label">Location</label>
+                            <input type="text" class="form-control" id="location" name="location" 
+                                   value="{{ offer.location if offer else '' }}" 
+                                   placeholder="e.g., Mumbai, Delhi, Apollo Hospital">
+                            <div class="form-text">City, hospital, or clinic location</div>
+                        </div>
+                    </div>
+
+                    <!-- Dates and Pricing -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-calendar-alt"></i> Dates and Pricing
+                    </h5>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_date" class="form-label">Start Date <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" id="start_date" name="start_date" required
+                                   value="{% if offer and offer.start_date %}{{ offer.start_date.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                            <div class="form-text">When the offer becomes active</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_date" class="form-label">End Date <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" id="end_date" name="end_date" required
+                                   value="{% if offer and offer.end_date %}{{ offer.end_date.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                            <div class="form-text">When the offer expires</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="discount_percentage" class="form-label">Discount Percentage</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="discount_percentage" name="discount_percentage" 
+                                       value="{{ offer.discount_percentage if offer else '' }}" 
+                                       min="0" max="100" step="0.01" placeholder="25">
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">Percentage discount (0-100). Leave empty if no discount</div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_free_camp" name="is_free_camp" value="1"
+                                       {% if offer and offer.is_free_camp %}checked{% endif %}>
+                                <label class="form-check-label" for="is_free_camp">
+                                    <i class="fas fa-gift text-success"></i> Free Camp/Service
+                                </label>
+                            </div>
+                            <div class="form-text ms-3">Check if this is a free medical camp or service</div>
+                        </div>
+                    </div>
+
+                    <!-- Treatment Association -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-link"></i> Treatment Association
+                    </h5>
+
+                    <div class="mb-3">
+                        <label for="treatment_id" class="form-label">Linked Treatment</label>
+                        <select class="form-select" id="treatment_id" name="treatment_id">
+                            <option value="">Select Treatment (Optional)</option>
+                            {% for treatment in treatments %}
+                            <option value="{{ treatment.id }}" {% if offer and offer.treatment_id == treatment.id %}selected{% endif %}>
+                                {{ treatment.name }}
+                                {% if treatment.hospital %}
+                                - {{ treatment.hospital.name }}
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Associate this offer with a specific treatment</div>
+                    </div>
+
+                    <!-- Status -->
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1"
+                                   {% if not offer or offer.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                <i class="fas fa-toggle-on text-success"></i> Active Status
+                            </label>
+                        </div>
+                        <div class="form-text">Uncheck to disable this offer temporarily</div>
+                    </div>
+
+                    <!-- Images -->
+                    <h5 class="mb-3 text-primary">
+                        <i class="fas fa-images"></i> Images & Media
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="images" class="form-label">Upload Images</label>
+                        <input type="file" class="form-control" id="images" name="images" 
+                               multiple accept="image/*">
+                        <div class="form-text">Upload multiple images for the offer gallery. First image will be the primary image.</div>
+                    </div>
+
+                    {% if offer and offer_images %}
+                    <div class="mb-3">
+                        <label class="form-label">Current Images</label>
+                        <div class="row">
+                            {% for image in offer_images %}
+                            <div class="col-md-3 mb-2">
+                                <div class="card">
+                                    <img src="{{ image.url }}" class="card-img-top" alt="Offer Image" style="height: 150px; object-fit: cover;">
+                                    <div class="card-body p-2">
+                                        {% if image.is_primary %}
+                                        <span class="badge bg-primary">Primary</span>
+                                        {% endif %}
+                                        <small class="text-muted d-block">Position: {{ image.position }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="/admin/offers" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ action }} Offer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Preview Card -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-eye"></i> Offer Preview
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if offer %}
+                <div class="offer-preview">
+                    <h6 class="fw-bold">{{ offer.name }}</h6>
+                    <p class="text-muted small">{{ offer.description[:100] }}{% if offer.description|length > 100 %}...{% endif %}</p>
+                    
+                    {% if offer.treatment_type %}
+                    <span class="badge bg-info mb-2">{{ offer.treatment_type }}</span>
+                    {% endif %}
+                    
+                    {% if offer.location %}
+                    <p class="small"><i class="fas fa-map-marker-alt text-danger"></i> {{ offer.location }}</p>
+                    {% endif %}
+                    
+                    {% if offer.discount_percentage %}
+                    <div class="alert alert-warning py-2">
+                        <strong><i class="fas fa-percentage"></i> {{ offer.discount_percentage }}% OFF</strong>
+                    </div>
+                    {% endif %}
+                    
+                    {% if offer.is_free_camp %}
+                    <div class="alert alert-success py-2">
+                        <strong><i class="fas fa-gift"></i> Free Camp</strong>
+                    </div>
+                    {% endif %}
+                    
+                    <small class="text-muted">
+                        <strong>Valid:</strong> 
+                        {{ offer.start_date.strftime('%Y-%m-%d') if offer.start_date else 'N/A' }} to 
+                        {{ offer.end_date.strftime('%Y-%m-%d') if offer.end_date else 'N/A' }}
+                    </small>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">
+                    <i class="fas fa-info-circle"></i><br>
+                    Preview will appear here after you fill in the form
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        {% if offer %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar"></i> Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h5 class="text-success mb-0">{{ offer.created_at.strftime('%Y-%m-%d') if offer.created_at else 'N/A' }}</h5>
+                        <small class="text-muted">Created</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-info mb-0">{{ offer.updated_at.strftime('%Y-%m-%d') if offer.updated_at else 'N/A' }}</h5>
+                        <small class="text-muted">Updated</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="text-center">
+                    {% set now = datetime.now() %}
+                    {% if offer.end_date and offer.end_date < now %}
+                    <span class="badge bg-danger">Expired</span>
+                    {% elif offer.start_date and offer.start_date > now %}
+                    <span class="badge bg-warning">Upcoming</span>
+                    {% else %}
+                    <span class="badge bg-success">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('form');
+    const startDate = document.getElementById('start_date');
+    const endDate = document.getElementById('end_date');
+    
+    function validateDates() {
+        if (startDate.value && endDate.value) {
+            const start = new Date(startDate.value);
+            const end = new Date(endDate.value);
+            
+            if (end <= start) {
+                endDate.setCustomValidity('End date must be after start date');
+            } else {
+                endDate.setCustomValidity('');
+            }
+        }
+    }
+    
+    startDate.addEventListener('change', validateDates);
+    endDate.addEventListener('change', validateDates);
+    
+    // Discount percentage validation
+    const discountInput = document.getElementById('discount_percentage');
+    discountInput.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        if (value < 0 || value > 100) {
+            this.setCustomValidity('Discount percentage must be between 0 and 100');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+    
+    // Character count for description
+    const description = document.getElementById('description');
+    const maxLength = 1000;
+    
+    function updateCharCount() {
+        const remaining = maxLength - description.value.length;
+        let countElement = document.getElementById('charCount');
+        
+        if (!countElement) {
+            countElement = document.createElement('small');
+            countElement.id = 'charCount';
+            countElement.className = 'form-text';
+            description.parentNode.appendChild(countElement);
+        }
+        
+        countElement.textContent = `${description.value.length}/${maxLength} characters`;
+        countElement.className = remaining < 50 ? 'form-text text-warning' : 'form-text text-muted';
+    }
+    
+    description.addEventListener('input', updateCharCount);
+    updateCharCount();
+});
+</script>
+{% endblock %}

@@ -104,15 +104,21 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="features" class="form-label">Hospital Features</label>
-                            <textarea class="form-control" id="features" name="features" rows="4"
-                                      placeholder="24/7 Emergency, ICU, Surgery Center, Pharmacy">{{ hospital.features if hospital and hospital.features else '' }}</textarea>
-                            <div class="form-text">Separate multiple features with commas</div>
+                            <textarea class="form-control" id="features" name="features" rows="6"
+                                      placeholder="24/7 Emergency Care&#10;ICU & Critical Care&#10;Surgery Center&#10;Pharmacy Services&#10;Laboratory Services">{{ hospital.features if hospital and hospital.features else '' }}</textarea>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle text-primary"></i> 
+                                Press Enter for new line. Each feature on a separate line for better display.
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label for="facilities" class="form-label">Available Facilities</label>
-                            <textarea class="form-control" id="facilities" name="facilities" rows="4"
-                                      placeholder="Parking, Cafeteria, WiFi, Chapel, Gift Shop">{{ hospital.facilities if hospital and hospital.facilities else '' }}</textarea>
-                            <div class="form-text">Separate multiple facilities with commas</div>
+                            <textarea class="form-control" id="facilities" name="facilities" rows="6"
+                                      placeholder="Free Parking&#10;24/7 Cafeteria&#10;Free WiFi&#10;Prayer Room&#10;Gift Shop&#10;Patient Library">{{ hospital.facilities if hospital and hospital.facilities else '' }}</textarea>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle text-primary"></i> 
+                                Press Enter for new line. Each facility on a separate line for better display.
+                            </div>
                         </div>
                     </div>
 

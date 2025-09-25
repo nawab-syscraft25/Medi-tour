@@ -112,12 +112,22 @@ class DoctorBase(BaseModel):
     description: Optional[str] = None
     designation: Optional[str] = None
     experience_years: Optional[int] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     gender: Optional[str] = None
     skills: Optional[str] = None  # comma-separated
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Rating must be a number')
+            if v < 1 or v > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        return v
 
 
 class DoctorCreate(DoctorBase):
@@ -130,12 +140,22 @@ class DoctorUpdate(BaseModel):
     description: Optional[str] = None
     designation: Optional[str] = None
     experience_years: Optional[int] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     gender: Optional[str] = None
     skills: Optional[str] = None
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Rating must be a number')
+            if v < 1 or v > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        return v
 
 
 class DoctorResponse(BaseSchema):
@@ -145,6 +165,7 @@ class DoctorResponse(BaseSchema):
     description: Optional[str] = None
     designation: Optional[str] = None
     experience_years: Optional[int] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     gender: Optional[str] = None
     skills: Optional[str] = None
@@ -168,11 +189,21 @@ class TreatmentBase(BaseModel):
     price_min: Optional[float] = None
     price_max: Optional[float] = None
     price_exact: Optional[float] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     other_hospital_name: Optional[str] = None
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Rating must be a number')
+            if v < 1 or v > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        return v
 
 
 class TreatmentCreate(TreatmentBase):
@@ -187,11 +218,21 @@ class TreatmentUpdate(BaseModel):
     price_min: Optional[float] = None
     price_max: Optional[float] = None
     price_exact: Optional[float] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     other_hospital_name: Optional[str] = None
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Rating must be a number')
+            if v < 1 or v > 5:
+                raise ValueError('Rating must be between 1 and 5')
+        return v
 
 
 class TreatmentResponse(BaseSchema):
@@ -203,6 +244,7 @@ class TreatmentResponse(BaseSchema):
     price_min: Optional[float] = None
     price_max: Optional[float] = None
     price_exact: Optional[float] = None
+    rating: Optional[float] = None
     hospital_id: Optional[int] = None
     other_hospital_name: Optional[str] = None
     doctor_id: Optional[int] = None
@@ -340,6 +382,96 @@ class ContactUsResponse(ContactUsBase, BaseSchema):
     admin_response: Optional[str] = None
     responded_at: Optional[datetime] = None
     created_at: datetime
+
+
+# Offer schemas (Attractions / Discount Packages)
+class OfferBase(BaseModel):
+    name: str
+    description: str
+    treatment_type: Optional[str] = None
+    location: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    discount_percentage: Optional[float] = None
+    is_free_camp: bool = False
+    treatment_id: Optional[int] = None
+    is_active: bool = True
+    
+    @validator('discount_percentage', pre=True, always=True)
+    def validate_discount_percentage(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Discount percentage must be a number')
+            if v < 0 or v > 100:
+                raise ValueError('Discount percentage must be between 0 and 100')
+        return v
+    
+    @validator('end_date')
+    def validate_end_date(cls, v, values):
+        if 'start_date' in values and v <= values['start_date']:
+            raise ValueError('End date must be after start date')
+        return v
+
+
+class OfferCreate(OfferBase):
+    pass
+
+
+class OfferUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    treatment_type: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    discount_percentage: Optional[float] = None
+    is_free_camp: Optional[bool] = None
+    treatment_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    
+    @validator('discount_percentage', pre=True, always=True)
+    def validate_discount_percentage(cls, v):
+        if v is not None:
+            if not isinstance(v, (int, float)):
+                raise ValueError('Discount percentage must be a number')
+            if v < 0 or v > 100:
+                raise ValueError('Discount percentage must be between 0 and 100')
+        return v
+
+
+class OfferResponse(BaseSchema):
+    id: int
+    name: str
+    description: str
+    treatment_type: Optional[str] = None
+    location: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    discount_percentage: Optional[float] = None
+    is_free_camp: bool = False
+    treatment_id: Optional[int] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    images: List[ImageResponse] = []
+    
+    @property
+    def is_expired(self) -> bool:
+        """Check if the offer has expired"""
+        return datetime.utcnow() > self.end_date
+    
+    @property
+    def is_current(self) -> bool:
+        """Check if the offer is currently active and not expired"""
+        now = datetime.utcnow()
+        return self.is_active and self.start_date <= now <= self.end_date
+    
+    @property
+    def days_remaining(self) -> int:
+        """Get the number of days remaining for the offer"""
+        if self.is_expired:
+            return 0
+        return (self.end_date - datetime.utcnow()).days
 
 
 # Update forward references

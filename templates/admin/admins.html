@@ -155,8 +155,9 @@
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% if admin_user['id'] != admin['id'] %}
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    onclick="confirmDelete({{ admin_user['id'] }}, '{{ admin_user['username'] }}')" 
+                                            <button type="button" class="btn btn-outline-danger delete-btn" 
+                                                    data-admin-id="{{ admin_user['id'] }}" 
+                                                    data-admin-name="{{ admin_user['username'] }}"
                                                     title="Delete">
                                                 <i class="fas fa-trash"></i>
                                             </button>
