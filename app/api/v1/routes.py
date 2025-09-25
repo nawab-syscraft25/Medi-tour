@@ -17,6 +17,7 @@ def hospital_to_dict(hospital: models.Hospital) -> dict:
         "phone": hospital.phone,
         "features": hospital.features,
         "facilities": hospital.facilities,
+        "rating": hospital.rating,
         "created_at": hospital.created_at,
         "images": []  # Will be populated separately
     }
@@ -37,6 +38,7 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "qualifications": doctor.qualifications,
         "highlights": doctor.highlights,
         "awards": doctor.awards,
+        "rating": doctor.rating,
         "created_at": doctor.created_at,
         "images": []  # Will be populated separately
     }
@@ -58,6 +60,7 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "doctor_id": treatment.doctor_id,
         "other_doctor_name": treatment.other_doctor_name,
         "location": treatment.location,
+        "rating": treatment.rating,
         "created_at": treatment.created_at,
         "images": []  # Will be populated separately
     }
