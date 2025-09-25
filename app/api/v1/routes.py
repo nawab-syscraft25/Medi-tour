@@ -465,7 +465,7 @@ async def get_treatments(
     if location:
         filters.append(models.Treatment.location.ilike(f"%{location}%"))
     if treatment_type:
-        filters.append(models.Treatment.treatment_type == treatment_type)
+        filters.append(models.Treatment.treatment_type.ilike(f"%{treatment_type}%"))
     if hospital_id:
         filters.append(models.Treatment.hospital_id == hospital_id)
     if doctor_id:
