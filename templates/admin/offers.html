@@ -130,7 +130,7 @@
                                     <small>
                                         <strong>Start:</strong> {{ offer.start_date.strftime("%Y-%m-%d") if offer.start_date else "N/A" }}<br>
                                         <strong>End:</strong> {{ offer.end_date.strftime("%Y-%m-%d") if offer.end_date else "N/A" }}
-                                        {% set now = moment() %}
+                                        {% set now = datetime.now() %}
                                         {% if offer.end_date and offer.end_date < now %}
                                         <br><span class="badge bg-danger">Expired</span>
                                         {% elif offer.start_date and offer.start_date > now %}
