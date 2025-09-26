@@ -1983,3 +1983,151 @@ async def admin_offer_update(
             "action": "Update",
             "error": f"Error updating offer: {str(e)}"
         })
+
+# Treatment Type Management API Endpoints
+@router.get("/admin/api/treatment-types")
+async def get_treatment_types_api(
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all treatment types for API"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    result = await db.execute(
+        select(Treatment.treatment_type).distinct().where(Treatment.treatment_type.isnot(None))
+    )
+    treatment_types = [t for t in result.scalars().all() if t and t.strip()]
+    
+    return {"treatment_types": sorted(treatment_types)}
+
+@router.post("/admin/api/treatment-types/rename")
+async def rename_treatment_type(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Rename a treatment type globally"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        data = await request.json()
+        old_name = data.get("old_name", "").strip()
+        new_name = data.get("new_name", "").strip()
+        
+        if not old_name or not new_name:
+            raise HTTPException(status_code=400, detail="Both old_name and new_name are required")
+        
+        if old_name == new_name:
+            raise HTTPException(status_code=400, detail="New name must be different from old name")
+        
+        # Check if new name already exists
+        existing_check = await db.execute(
+            select(Treatment).where(Treatment.treatment_type == new_name).limit(1)
+        )
+        if existing_check.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="A treatment type with this name already exists")
+        
+        # Update all treatments with the old type
+        result = await db.execute(
+            update(Treatment)
+            .where(Treatment.treatment_type == old_name)
+            .values(treatment_type=new_name)
+        )
+        
+        # Also update offers if they have this treatment type
+        await db.execute(
+            update(Offer)
+            .where(Offer.treatment_type == old_name)
+            .values(treatment_type=new_name)
+        )
+        
+        await db.commit()
+        
+        affected_count = result.rowcount
+        return {
+            "message": f"Treatment type renamed successfully",
+            "affected_treatments": affected_count,
+            "old_name": old_name,
+            "new_name": new_name
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error renaming treatment type: {str(e)}")
+
+@router.post("/admin/api/treatment-types/delete")
+async def delete_treatment_type(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a treatment type globally"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        data = await request.json()
+        type_name = data.get("type_name", "").strip()
+        replacement_type = data.get("replacement_type")
+        
+        if not type_name:
+            raise HTTPException(status_code=400, detail="type_name is required")
+        
+        if replacement_type:
+            replacement_type = replacement_type.strip() or None
+        
+        # Count affected treatments
+        count_result = await db.execute(
+            select(func.count(Treatment.id)).where(Treatment.treatment_type == type_name)
+        )
+        affected_treatments = count_result.scalar()
+        
+        # Update treatments
+        if replacement_type:
+            await db.execute(
+                update(Treatment)
+                .where(Treatment.treatment_type == type_name)
+                .values(treatment_type=replacement_type)
+            )
+        else:
+            await db.execute(
+                update(Treatment)
+                .where(Treatment.treatment_type == type_name)
+                .values(treatment_type=None)
+            )
+        
+        # Update offers as well
+        if replacement_type:
+            await db.execute(
+                update(Offer)
+                .where(Offer.treatment_type == type_name)
+                .values(treatment_type=replacement_type)
+            )
+        else:
+            await db.execute(
+                update(Offer)
+                .where(Offer.treatment_type == type_name)
+                .values(treatment_type=None)
+            )
+        
+        await db.commit()
+        
+        return {
+            "message": f"Treatment type deleted successfully",
+            "affected_treatments": affected_treatments,
+            "deleted_type": type_name,
+            "replacement_type": replacement_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting treatment type: {str(e)}")
