@@ -82,7 +82,7 @@ async def create_sample_hospitals(db: AsyncSession) -> list:
             "location": "Bangalore, Karnataka", 
             "phone": "+91-80-2658999",
             "features": "Trauma Center, Robotic Surgery, Advanced Imaging, Lab Services",
-            "facilities": "Cardiac Surgery, Neurosurgery, Transplant Services, Emergency Care"
+            "facilities": "Surgical Treatment, Neurosurgery, Transplant Services, Emergency Care"
         },
         {
             "name": "Lilavati Hospital Mumbai",
@@ -216,7 +216,7 @@ async def create_sample_treatments(db: AsyncSession, hospitals: list, doctors: l
             "name": "Cardiac Bypass Surgery",
             "short_description": "Advanced heart bypass surgery for blocked coronary arteries",
             "long_description": "Comprehensive cardiac bypass surgery using state-of-the-art techniques. Our experienced cardiac surgeons perform both on-pump and off-pump procedures with excellent success rates. Includes pre-operative assessment, surgery, ICU care, and post-operative rehabilitation.",
-            "treatment_type": "Cardiac Surgery",
+            "treatment_type": "Surgical Treatment",
             "price_min": 250000.0,
             "price_max": 400000.0,
             "hospital_id": hospitals[0].id,
@@ -227,7 +227,7 @@ async def create_sample_treatments(db: AsyncSession, hospitals: list, doctors: l
             "name": "Stroke Treatment & Rehabilitation",
             "short_description": "Comprehensive stroke treatment with advanced neuro-intervention",
             "long_description": "Complete stroke management including emergency thrombolysis, mechanical thrombectomy, and comprehensive rehabilitation. Our stroke unit provides 24/7 care with specialized neurologists and rehabilitation team for optimal recovery outcomes.",
-            "treatment_type": "Neurology",
+            "treatment_type": "Clinical Treatment",
             "price_min": 150000.0,
             "price_max": 300000.0,
             "hospital_id": hospitals[1].id,
@@ -238,7 +238,7 @@ async def create_sample_treatments(db: AsyncSession, hospitals: list, doctors: l
             "name": "Total Knee Replacement",
             "short_description": "Advanced joint replacement surgery with minimal invasive techniques",
             "long_description": "State-of-the-art total knee replacement using computer-assisted surgery and latest implants. Includes pre-operative planning, minimally invasive surgery, post-operative care, and comprehensive physiotherapy for faster recovery and better outcomes.",
-            "treatment_type": "Orthopedics", 
+            "treatment_type": "Dental Treatment", 
             "price_min": 180000.0,
             "price_max": 280000.0,
             "hospital_id": hospitals[2].id,

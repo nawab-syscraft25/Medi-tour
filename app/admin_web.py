@@ -20,7 +20,8 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog
+from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
 
@@ -188,6 +189,9 @@ async def get_dashboard_stats(db: AsyncSession):
     stats["treatments"] = await db.scalar(select(func.count(Treatment.id)))
     stats["offers"] = await db.scalar(select(func.count(Offer.id)))
     stats["contacts"] = await db.scalar(select(func.count(Contact.id)))
+    stats["bookings"] = await db.scalar(select(func.count(PackageBooking.id)))
+    stats["blogs"] = await db.scalar(select(func.count(Blog.id)))
+    stats["published_blogs"] = await db.scalar(select(func.count(Blog.id)).where(Blog.is_published == True))
     stats["admins"] = await db.scalar(select(func.count(Admin.id)))
     stats["images"] = await db.scalar(select(func.count(Image.id)))
     
@@ -196,6 +200,15 @@ async def get_dashboard_stats(db: AsyncSession):
         select(Contact).order_by(desc(Contact.created_at)).limit(5)
     )
     stats["recent_contacts"] = recent_contacts.scalars().all()
+    
+    # Recent bookings with treatment information
+    recent_bookings = await db.execute(
+        select(PackageBooking)
+        .options(selectinload(PackageBooking.treatment))
+        .order_by(desc(PackageBooking.created_at))
+        .limit(5)
+    )
+    stats["recent_bookings"] = recent_bookings.scalars().all()
     
     return stats
 
@@ -614,6 +627,198 @@ async def delete_contact(
     await db.commit()
     
     return {"message": "Contact deleted successfully"}
+
+# Package Booking Management
+@router.get("/admin/bookings", response_class=HTMLResponse)
+async def admin_bookings(
+    request: Request,
+    page: int = 1,
+    filter_days: Optional[int] = None,
+    search: Optional[str] = None,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Package booking management page with time filters"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    limit = 15
+    offset = (page - 1) * limit
+    
+    # Build query
+    query = select(PackageBooking).options(selectinload(PackageBooking.treatment))
+    
+    # Apply time filters
+    if filter_days:
+        cutoff_date = datetime.utcnow() - timedelta(days=filter_days)
+        query = query.where(PackageBooking.created_at >= cutoff_date)
+    
+    # Apply search filter
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.where(
+            (PackageBooking.first_name.ilike(search_term)) |
+            (PackageBooking.last_name.ilike(search_term)) |
+            (PackageBooking.email.ilike(search_term)) |
+            (PackageBooking.mobile_no.ilike(search_term)) |
+            (PackageBooking.user_query.ilike(search_term))
+        )
+    
+    # Add ordering and pagination
+    query = query.order_by(desc(PackageBooking.created_at)).offset(offset).limit(limit)
+    
+    result = await db.execute(query)
+    bookings = result.scalars().all()
+    
+    # Get total count for pagination
+    count_query = select(func.count(PackageBooking.id))
+    if filter_days:
+        cutoff_date = datetime.utcnow() - timedelta(days=filter_days)
+        count_query = count_query.where(PackageBooking.created_at >= cutoff_date)
+    if search:
+        search_term = f"%{search.strip()}%"
+        count_query = count_query.where(
+            (PackageBooking.first_name.ilike(search_term)) |
+            (PackageBooking.last_name.ilike(search_term)) |
+            (PackageBooking.email.ilike(search_term)) |
+            (PackageBooking.mobile_no.ilike(search_term)) |
+            (PackageBooking.user_query.ilike(search_term))
+        )
+    
+    total = await db.scalar(count_query)
+    total_pages = (total + limit - 1) // limit
+    
+    # Get booking statistics
+    stats_query = select(func.count(PackageBooking.id))
+    total_bookings = await db.scalar(stats_query)
+    
+    # Last 7 days bookings
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_bookings = await db.scalar(
+        select(func.count(PackageBooking.id)).where(PackageBooking.created_at >= week_ago)
+    )
+    
+    # Last 30 days bookings
+    month_ago = datetime.utcnow() - timedelta(days=30)
+    month_bookings = await db.scalar(
+        select(func.count(PackageBooking.id)).where(PackageBooking.created_at >= month_ago)
+    )
+    
+    return render_template("admin/bookings.html", {
+        "request": request,
+        "admin": admin,
+        "bookings": bookings,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "filter_days": filter_days,
+        "search": search or "",
+        "total_bookings": total_bookings,
+        "week_bookings": week_bookings,
+        "month_bookings": month_bookings
+    })
+
+@router.get("/admin/bookings/{booking_id}/details")
+async def get_booking_details(
+    booking_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get booking details for modal display"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Get booking with treatment data
+    result = await db.execute(
+        select(PackageBooking).options(
+            selectinload(PackageBooking.treatment)
+        ).where(PackageBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Helper function to resolve doctor preference
+    async def resolve_doctor_preference(pref_string):
+        if not pref_string:
+            return "No preference"
+        
+        # Check if it's a numeric ID
+        try:
+            doctor_id = int(pref_string.strip())
+            doctor = await db.get(Doctor, doctor_id)
+            if doctor:
+                return doctor.name
+            else:
+                return f"Doctor ID {doctor_id} (Not found)"
+        except ValueError:
+            # Not a numeric ID, return as is
+            return pref_string
+    
+    # Helper function to resolve hospital preference
+    async def resolve_hospital_preference(pref_string):
+        if not pref_string:
+            return "No preference"
+        
+        # Check if it's a numeric ID
+        try:
+            hospital_id = int(pref_string.strip())
+            hospital = await db.get(Hospital, hospital_id)
+            if hospital:
+                return hospital.name
+            else:
+                return f"Hospital ID {hospital_id} (Not found)"
+        except ValueError:
+            # Not a numeric ID, return as is
+            return pref_string
+    
+    # Resolve preferences
+    doctor_preference_resolved = await resolve_doctor_preference(booking.doctor_preference)
+    hospital_preference_resolved = await resolve_hospital_preference(booking.hospital_preference)
+    
+    return {
+        "id": booking.id,
+        "first_name": booking.first_name,
+        "last_name": booking.last_name,
+        "email": booking.email,
+        "mobile_no": booking.mobile_no,
+        "treatment": {
+            "id": booking.treatment.id if booking.treatment else None,
+            "name": booking.treatment.name if booking.treatment else "N/A",
+            "treatment_type": booking.treatment.treatment_type if booking.treatment else "N/A"
+        } if booking.treatment else None,
+        "budget": booking.budget,
+        "medical_history_file": booking.medical_history_file,
+        "doctor_preference": doctor_preference_resolved,
+        "hospital_preference": hospital_preference_resolved,
+        "user_query": booking.user_query,
+        "travel_assistant": booking.travel_assistant,
+        "stay_assistant": booking.stay_assistant,
+        "created_at": booking.created_at.isoformat() if booking.created_at else None
+    }
+
+@router.delete("/admin/bookings/{booking_id}")
+async def delete_booking(
+    booking_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a booking"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    booking = await db.get(PackageBooking, booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    await db.delete(booking)
+    await db.commit()
+    
+    return {"message": "Booking deleted successfully"}
 
 @router.delete("/admin/hospitals/{hospital_id}")
 async def delete_hospital(
@@ -1373,7 +1578,7 @@ async def admin_hospital_update(
     phone: str = Form(""),
     email: str = Form(""),
     address: str = Form(""),
-    rating: Optional[float] = Form(None),
+    rating: str = Form(""),
     specializations: str = Form(""),
     features: str = Form(""),
     facilities: str = Form(""),
@@ -1394,17 +1599,28 @@ async def admin_hospital_update(
         if not hospital:
             raise HTTPException(status_code=404, detail="Hospital not found")
         
+        # Create and validate the update data using Pydantic schema
+        update_data = HospitalUpdate(
+            name=name,
+            description=description or None,
+            location=location or None,
+            phone=phone or None,
+            rating=rating,
+            features=parse_comma_separated_string(features),
+            facilities=parse_comma_separated_string(facilities)
+        )
+        
         # Update hospital fields
-        hospital.name = name
-        hospital.description = description or None
-        hospital.location = location or None
-        hospital.phone = phone or None
+        hospital.name = update_data.name
+        hospital.description = update_data.description
+        hospital.location = update_data.location
+        hospital.phone = update_data.phone
         hospital.email = email or None
         hospital.address = address or None
-        hospital.rating = rating
+        hospital.rating = update_data.rating
         hospital.specializations = parse_comma_separated_string(specializations)
-        hospital.features = parse_comma_separated_string(features)
-        hospital.facilities = parse_comma_separated_string(facilities)
+        hospital.features = update_data.features
+        hospital.facilities = update_data.facilities
         
         # Handle new image uploads
         # Get current image count for this hospital
@@ -1538,9 +1754,9 @@ async def admin_doctor_update(
     doctor_id: int,
     name: str = Form(...),
     designation: str = Form(""),
-    hospital_id: Optional[int] = Form(None),
-    experience_years: Optional[int] = Form(None),
-    rating: Optional[float] = Form(None),
+    hospital_id: str = Form(""),
+    experience_years: str = Form(""),
+    rating: str = Form(""),
     gender: str = Form(""),
     description: str = Form(""),
     specialization: str = Form(""),
@@ -1571,19 +1787,33 @@ async def admin_doctor_update(
             profile_photo_filename = await save_uploaded_file(profile_photo, "doctor")
             doctor.profile_photo = f"/media/doctor/{profile_photo_filename}"
         
+        # Create and validate the update data using Pydantic schema
+        update_data = DoctorUpdate(
+            name=name,
+            designation=designation or None,
+            hospital_id=int(hospital_id) if hospital_id and hospital_id.strip() else None,
+            experience_years=experience_years,
+            rating=rating,
+            gender=gender or None,
+            skills=parse_comma_separated_string(skills),
+            qualifications=parse_comma_separated_string(qualifications),
+            highlights=parse_comma_separated_string(highlights),
+            awards=parse_comma_separated_string(awards)
+        )
+        
         # Update doctor fields
-        doctor.name = name
-        doctor.designation = designation or None
-        doctor.hospital_id = hospital_id
-        doctor.experience_years = experience_years
-        doctor.rating = rating
-        doctor.gender = gender or None
+        doctor.name = update_data.name
+        doctor.designation = update_data.designation
+        doctor.hospital_id = update_data.hospital_id
+        doctor.experience_years = update_data.experience_years
+        doctor.rating = update_data.rating
+        doctor.gender = update_data.gender
         doctor.description = description or None
         doctor.specialization = specialization or None
-        doctor.skills = parse_comma_separated_string(skills)
-        doctor.qualifications = parse_comma_separated_string(qualifications)
-        doctor.highlights = parse_comma_separated_string(highlights)
-        doctor.awards = parse_comma_separated_string(awards)
+        doctor.skills = update_data.skills
+        doctor.qualifications = update_data.qualifications
+        doctor.highlights = update_data.highlights
+        doctor.awards = update_data.awards
         
         # Handle new image uploads
         # Get current image count for this doctor
@@ -1719,13 +1949,13 @@ async def admin_treatment_update(
     long_description: str = Form(""),
     treatment_type: str = Form(...),
     location: str = Form(...),
-    price_min: Optional[float] = Form(None),
-    price_max: Optional[float] = Form(None),
-    price_exact: Optional[float] = Form(None),
-    rating: Optional[float] = Form(None),
-    hospital_id: Optional[int] = Form(None),
+    price_min: str = Form(""),
+    price_max: str = Form(""),
+    price_exact: str = Form(""),
+    rating: str = Form(""),
+    hospital_id: str = Form(""),
     other_hospital_name: str = Form(""),
-    doctor_id: Optional[int] = Form(None),
+    doctor_id: str = Form(""),
     other_doctor_name: str = Form(""),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
@@ -1744,20 +1974,37 @@ async def admin_treatment_update(
         if not treatment:
             raise HTTPException(status_code=404, detail="Treatment not found")
         
+        # Create and validate the update data using Pydantic schema
+        update_data = TreatmentUpdate(
+            name=name,
+            short_description=short_description,
+            long_description=long_description or None,
+            treatment_type=treatment_type,
+            location=location,
+            price_min=price_min,
+            price_max=price_max,
+            price_exact=price_exact,
+            rating=rating,
+            hospital_id=int(hospital_id) if hospital_id and hospital_id.strip() else None,
+            other_hospital_name=other_hospital_name or None,
+            doctor_id=int(doctor_id) if doctor_id and doctor_id.strip() else None,
+            other_doctor_name=other_doctor_name or None
+        )
+        
         # Update treatment fields
-        treatment.name = name
-        treatment.short_description = short_description
-        treatment.long_description = long_description or None
-        treatment.treatment_type = treatment_type
-        treatment.location = location
-        treatment.price_min = price_min
-        treatment.price_max = price_max
-        treatment.price_exact = price_exact
-        treatment.rating = rating
-        treatment.hospital_id = hospital_id
-        treatment.other_hospital_name = other_hospital_name or None
-        treatment.doctor_id = doctor_id
-        treatment.other_doctor_name = other_doctor_name or None
+        treatment.name = update_data.name
+        treatment.short_description = update_data.short_description
+        treatment.long_description = update_data.long_description
+        treatment.treatment_type = update_data.treatment_type
+        treatment.location = update_data.location
+        treatment.price_min = update_data.price_min
+        treatment.price_max = update_data.price_max
+        treatment.price_exact = update_data.price_exact
+        treatment.rating = update_data.rating
+        treatment.hospital_id = update_data.hospital_id
+        treatment.other_hospital_name = update_data.other_hospital_name
+        treatment.doctor_id = update_data.doctor_id
+        treatment.other_doctor_name = update_data.other_doctor_name
         
         # Handle new image uploads
         # Get current image count for this treatment
@@ -2131,3 +2378,407 @@ async def delete_treatment_type(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error deleting treatment type: {str(e)}")
+
+
+# ================================
+# BLOG MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/blogs", response_class=HTMLResponse)
+async def admin_blogs_list(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Display blogs list page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get all blogs with pagination
+    result = await db.execute(
+        select(Blog)
+        .order_by(desc(Blog.created_at))
+        .limit(50)
+    )
+    blogs = result.scalars().all()
+    
+    return templates.TemplateResponse("admin/blogs.html", {
+        "request": request,
+        "admin": admin,
+        "blogs": blogs
+    })
+
+
+@router.get("/admin/blogs/new", response_class=HTMLResponse)
+async def admin_blog_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Display new blog form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return templates.TemplateResponse("admin/blog_form.html", {
+        "request": request,
+        "admin": admin,
+        "blog": None,
+        "action": "create"
+    })
+
+
+@router.post("/admin/blogs")
+async def admin_blog_create(
+    request: Request,
+    title: str = Form(...),
+    subtitle: str = Form(""),
+    content: str = Form(...),
+    excerpt: str = Form(""),
+    meta_description: str = Form(""),
+    tags: str = Form(""),
+    category: str = Form(""),
+    author_name: str = Form(""),
+    reading_time: str = Form(""),
+    is_published: bool = Form(False),
+    is_featured: bool = Form(False),
+    featured_image: Optional[UploadFile] = File(None),
+    content_images: List[UploadFile] = File(default=[]),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new blog"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    print(f"DEBUG: Creating blog with title: {title}")
+    print(f"DEBUG: Content length: {len(content) if content else 0}")
+    print(f"DEBUG: Reading time: {reading_time}")
+    print(f"DEBUG: Is published: {is_published}")
+    
+    try:
+        # Generate slug from title
+        import re
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', title.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        slug = re.sub(r'-+', '-', slug)
+        
+        # Ensure slug is unique
+        base_slug = slug
+        counter = 1
+        while True:
+            result = await db.execute(select(Blog).where(Blog.slug == slug))
+            existing = result.scalar_one_or_none()
+            if not existing:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        # Handle featured image upload
+        featured_image_url = None
+        if featured_image and featured_image.filename:
+            filename = await save_uploaded_file(featured_image, "blog")
+            if filename:
+                featured_image_url = f"/media/blog/{filename}"
+        
+        # Convert reading_time to int if provided
+        reading_time_int = None
+        if reading_time and reading_time.strip():
+            try:
+                reading_time_int = int(reading_time)
+            except ValueError:
+                reading_time_int = None
+        
+        # Create and validate the blog data using Pydantic schema
+        blog_data = BlogCreate(
+            title=title,
+            subtitle=subtitle or None,
+            content=content,
+            excerpt=excerpt or None,
+            featured_image=featured_image_url,
+            meta_description=meta_description or None,
+            tags=tags or None,
+            category=category or None,
+            author_name=author_name or None,
+            reading_time=reading_time_int,
+            is_published=is_published,
+            is_featured=is_featured,
+            published_at=datetime.utcnow() if is_published else None
+        )
+        
+        # Create new blog
+        blog = Blog(
+            title=blog_data.title,
+            subtitle=blog_data.subtitle,
+            slug=slug,
+            content=blog_data.content,
+            excerpt=blog_data.excerpt,
+            featured_image=blog_data.featured_image,
+            meta_description=blog_data.meta_description,
+            tags=blog_data.tags,
+            category=blog_data.category,
+            author_name=blog_data.author_name,
+            reading_time=blog_data.reading_time,
+            is_published=blog_data.is_published,
+            is_featured=blog_data.is_featured,
+            published_at=blog_data.published_at
+        )
+        
+        db.add(blog)
+        await db.flush()  # Get the blog ID
+        
+        # Handle content images upload
+        for image_file in content_images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "blog")
+                if filename:
+                    image = Image(
+                        owner_type="blog",
+                        owner_id=blog.id,
+                        url=f"/media/blog/{filename}",
+                        is_primary=False
+                    )
+                    db.add(image)
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/blogs", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        return templates.TemplateResponse("admin/blog_form.html", {
+            "request": request,
+            "admin": admin,
+            "blog": None,
+            "action": "create",
+            "error": f"Error creating blog: {str(e)}"
+        })
+
+
+@router.get("/admin/blogs/{blog_id}/edit", response_class=HTMLResponse)
+async def admin_blog_edit(
+    request: Request,
+    blog_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Display edit blog form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get blog with images
+    result = await db.execute(
+        select(Blog)
+        .where(Blog.id == blog_id)
+    )
+    blog = result.scalar_one_or_none()
+    
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    
+    # Get blog images
+    images_result = await db.execute(
+        select(Image)
+        .where(Image.owner_type == "blog", Image.owner_id == blog_id)
+        .order_by(Image.position.asc().nullslast(), Image.id.asc())
+    )
+    images = images_result.scalars().all()
+    
+    return templates.TemplateResponse("admin/blog_form.html", {
+        "request": request,
+        "admin": admin,
+        "blog": blog,
+        "images": images,
+        "action": "edit"
+    })
+
+
+@router.post("/admin/blogs/{blog_id}")
+async def admin_blog_update(
+    request: Request,
+    blog_id: int,
+    title: str = Form(...),
+    subtitle: str = Form(""),
+    content: str = Form(...),
+    excerpt: str = Form(""),
+    meta_description: str = Form(""),
+    tags: str = Form(""),
+    category: str = Form(""),
+    author_name: str = Form(""),
+    reading_time: str = Form(""),
+    is_published: bool = Form(False),
+    is_featured: bool = Form(False),
+    featured_image: Optional[UploadFile] = File(None),
+    content_images: List[UploadFile] = File(default=[]),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update existing blog"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing blog
+        result = await db.execute(select(Blog).where(Blog.id == blog_id))
+        blog = result.scalar_one_or_none()
+        
+        if not blog:
+            raise HTTPException(status_code=404, detail="Blog not found")
+        
+        # Handle featured image upload
+        featured_image_url = blog.featured_image
+        if featured_image and featured_image.filename:
+            filename = await save_uploaded_file(featured_image, "blog")
+            if filename:
+                featured_image_url = f"/media/blog/{filename}"
+        
+        # Convert reading_time to int if provided
+        reading_time_int = None
+        if reading_time and reading_time.strip():
+            try:
+                reading_time_int = int(reading_time)
+            except ValueError:
+                reading_time_int = None
+        
+        # Create and validate the update data using Pydantic schema
+        update_data = BlogUpdate(
+            title=title,
+            subtitle=subtitle or None,
+            content=content,
+            excerpt=excerpt or None,
+            featured_image=featured_image_url,
+            meta_description=meta_description or None,
+            tags=tags or None,
+            category=category or None,
+            author_name=author_name or None,
+            reading_time=reading_time_int,
+            is_published=is_published,
+            is_featured=is_featured,
+            published_at=datetime.utcnow() if is_published and not blog.published_at else blog.published_at
+        )
+        
+        # Update blog fields
+        blog.title = update_data.title
+        blog.subtitle = update_data.subtitle
+        blog.content = update_data.content
+        blog.excerpt = update_data.excerpt
+        blog.featured_image = update_data.featured_image
+        blog.meta_description = update_data.meta_description
+        blog.tags = update_data.tags
+        blog.category = update_data.category
+        blog.author_name = update_data.author_name
+        blog.reading_time = update_data.reading_time
+        blog.is_published = update_data.is_published
+        blog.is_featured = update_data.is_featured
+        blog.published_at = update_data.published_at
+        
+        # Handle new content images upload
+        for image_file in content_images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "blog")
+                if filename:
+                    image = Image(
+                        owner_type="blog",
+                        owner_id=blog.id,
+                        url=f"/media/blog/{filename}",
+                        is_primary=False
+                    )
+                    db.add(image)
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/blogs", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        # Get blog images for form redisplay
+        images_result = await db.execute(
+            select(Image)
+            .where(Image.owner_type == "blog", Image.owner_id == blog_id)
+            .order_by(Image.position.asc().nullslast(), Image.id.asc())
+        )
+        images = images_result.scalars().all()
+        
+        return templates.TemplateResponse("admin/blog_form.html", {
+            "request": request,
+            "admin": admin,
+            "blog": blog,
+            "images": images,
+            "action": "edit",
+            "error": f"Error updating blog: {str(e)}"
+        })
+
+
+@router.delete("/admin/blogs/{blog_id}")
+async def admin_blog_delete(
+    request: Request,
+    blog_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete blog"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        # Get blog
+        result = await db.execute(select(Blog).where(Blog.id == blog_id))
+        blog = result.scalar_one_or_none()
+        
+        if not blog:
+            raise HTTPException(status_code=404, detail="Blog not found")
+        
+        # Delete associated images
+        await db.execute(
+            select(Image).where(Image.owner_type == "blog", Image.owner_id == blog_id)
+        )
+        
+        # Delete blog
+        await db.delete(blog)
+        await db.commit()
+        
+        return {"message": "Blog deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting blog: {str(e)}")
+
+
+@router.get("/admin/blogs/{blog_id}/images")
+async def admin_blog_images(
+    request: Request,
+    blog_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get blog images for content editor"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get blog images
+    result = await db.execute(
+        select(Image)
+        .where(Image.owner_type == "blog", Image.owner_id == blog_id)
+        .order_by(Image.position.asc().nullslast(), Image.id.asc())
+    )
+    images = result.scalars().all()
+    
+    return {
+        "images": [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "uploaded_at": img.uploaded_at.isoformat()
+            }
+            for img in images
+        ]
+    }

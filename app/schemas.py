@@ -74,8 +74,23 @@ class HospitalBase(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     phone: Optional[str] = None
+    rating: Optional[float] = None
     features: Optional[str] = None  # comma-separated
     facilities: Optional[str] = None  # comma-separated
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class HospitalCreate(HospitalBase):
@@ -87,8 +102,23 @@ class HospitalUpdate(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     phone: Optional[str] = None
+    rating: Optional[float] = None
     features: Optional[str] = None
     facilities: Optional[str] = None
+    
+    @validator('rating', pre=True, always=True)
+    def validate_rating(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class HospitalResponse(HospitalBase, BaseSchema):
@@ -120,14 +150,33 @@ class DoctorBase(BaseModel):
     highlights: Optional[str] = None
     awards: Optional[str] = None
     
+    @validator('experience_years', pre=True, always=True)
+    def validate_experience_years(cls, v):
+        if v is not None and v != "":
+            try:
+                v = int(v)
+                if v < 0:
+                    raise ValueError('Experience years must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Experience years must be a valid number')
+        return None
+    
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
-        if v is not None:
-            if not isinstance(v, (int, float)):
-                raise ValueError('Rating must be a number')
-            if v < 1 or v > 5:
-                raise ValueError('Rating must be between 1 and 5')
-        return v
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class DoctorCreate(DoctorBase):
@@ -148,14 +197,33 @@ class DoctorUpdate(BaseModel):
     highlights: Optional[str] = None
     awards: Optional[str] = None
     
+    @validator('experience_years', pre=True, always=True)
+    def validate_experience_years(cls, v):
+        if v is not None and v != "":
+            try:
+                v = int(v)
+                if v < 0:
+                    raise ValueError('Experience years must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Experience years must be a valid number')
+        return None
+    
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
-        if v is not None:
-            if not isinstance(v, (int, float)):
-                raise ValueError('Rating must be a number')
-            if v < 1 or v > 5:
-                raise ValueError('Rating must be between 1 and 5')
-        return v
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class DoctorResponse(BaseSchema):
@@ -196,14 +264,33 @@ class TreatmentBase(BaseModel):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     
+    @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
+    def validate_prices(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 0:
+                    raise ValueError('Price must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Price must be a valid number')
+        return None
+    
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
-        if v is not None:
-            if not isinstance(v, (int, float)):
-                raise ValueError('Rating must be a number')
-            if v < 1 or v > 5:
-                raise ValueError('Rating must be between 1 and 5')
-        return v
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class TreatmentCreate(TreatmentBase):
@@ -225,14 +312,33 @@ class TreatmentUpdate(BaseModel):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     
+    @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
+    def validate_prices(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 0:
+                    raise ValueError('Price must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Price must be a valid number')
+        return None
+    
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
-        if v is not None:
-            if not isinstance(v, (int, float)):
-                raise ValueError('Rating must be a number')
-            if v < 1 or v > 5:
-                raise ValueError('Rating must be between 1 and 5')
-        return v
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 1 or v > 5:
+                    raise ValueError('Rating must be between 1 and 5')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Rating must be a valid number')
+        return None
 
 
 class TreatmentResponse(BaseSchema):
@@ -256,13 +362,15 @@ class TreatmentResponse(BaseSchema):
 
 # Package Booking schemas
 class PackageBookingBase(BaseModel):
-    name: str
+    first_name: str
+    last_name: str
     email: EmailStr
-    phone: str
-    service_type: Optional[str] = None  # "hospital","doctor","treatment","other"
-    service_ref: Optional[str] = None
-    budget_range: Optional[str] = None
+    mobile_no: str
+    treatment_id: Optional[int] = None
+    budget: Optional[str] = None
     medical_history_file: Optional[str] = None
+    doctor_preference: Optional[str] = None
+    hospital_preference: Optional[str] = None
     user_query: Optional[str] = None
     travel_assistant: bool = False
     stay_assistant: bool = False
@@ -270,6 +378,21 @@ class PackageBookingBase(BaseModel):
 
 class PackageBookingCreate(PackageBookingBase):
     pass
+
+
+class PackageBookingUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile_no: Optional[str] = None
+    treatment_id: Optional[int] = None
+    budget: Optional[str] = None
+    medical_history_file: Optional[str] = None
+    doctor_preference: Optional[str] = None
+    hospital_preference: Optional[str] = None
+    user_query: Optional[str] = None
+    travel_assistant: Optional[bool] = None
+    stay_assistant: Optional[bool] = None
 
 
 class PackageBookingResponse(PackageBookingBase, BaseSchema):
@@ -474,8 +597,93 @@ class OfferResponse(BaseSchema):
         return (self.end_date - datetime.utcnow()).days
 
 
+# Blog schemas
+class BlogBase(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    content: str
+    excerpt: Optional[str] = None
+    featured_image: Optional[str] = None
+    meta_description: Optional[str] = None
+    tags: Optional[str] = None  # comma-separated
+    category: Optional[str] = None
+    author_name: Optional[str] = None
+    reading_time: Optional[int] = None
+    is_published: bool = False
+    is_featured: bool = False
+    published_at: Optional[datetime] = None
+    
+    @validator('reading_time', pre=True, always=True)
+    def validate_reading_time(cls, v):
+        if v is not None and v != "":
+            try:
+                v = int(v)
+                if v < 0:
+                    raise ValueError('Reading time must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Reading time must be a valid number')
+        return None
+
+
+class BlogCreate(BlogBase):
+    pass
+
+
+class BlogUpdate(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    content: Optional[str] = None
+    excerpt: Optional[str] = None
+    featured_image: Optional[str] = None
+    meta_description: Optional[str] = None
+    tags: Optional[str] = None
+    category: Optional[str] = None
+    author_name: Optional[str] = None
+    reading_time: Optional[int] = None
+    is_published: Optional[bool] = None
+    is_featured: Optional[bool] = None
+    published_at: Optional[datetime] = None
+    
+    @validator('reading_time', pre=True, always=True)
+    def validate_reading_time(cls, v):
+        if v is not None and v != "":
+            try:
+                v = int(v)
+                if v < 0:
+                    raise ValueError('Reading time must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Reading time must be a valid number')
+        return None
+
+
+class BlogResponse(BlogBase, BaseSchema):
+    id: int
+    slug: str
+    view_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+    images: List[ImageResponse] = []
+    
+    @property
+    def tags_list(self) -> List[str]:
+        return [tag.strip() for tag in (self.tags or "").split(",") if tag.strip()]
+    
+    @property
+    def reading_time_display(self) -> str:
+        if self.reading_time:
+            return f"{self.reading_time} min read"
+        return "Quick read"
+
+
 # Update forward references
 DoctorResponse.model_rebuild()
 HospitalResponse.model_rebuild()
 TreatmentResponse.model_rebuild()
 AppointmentResponse.model_rebuild()
+BlogResponse.model_rebuild()

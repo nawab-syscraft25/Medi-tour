@@ -8,7 +8,7 @@ Base = declarative_base()
 class Image(Base):
     __tablename__ = "images"
     id = Column(Integer, primary_key=True, index=True)
-    owner_type = Column(String(50), nullable=False)  # "hospital","doctor","treatment","slider","offer"
+    owner_type = Column(String(50), nullable=False)  # "hospital","doctor","treatment","slider","offer","blog"
     owner_id = Column(Integer, nullable=False)
     url = Column(String(1000), nullable=False)
     is_primary = Column(Boolean, default=False)
@@ -71,7 +71,7 @@ class Doctor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="doctors", lazy="noload")
     appointments = relationship("Appointment", back_populates="doctor", lazy="noload")
-    images = relationship("Image", 
+    images = relationship("Image",
                          primaryjoin="and_(Doctor.id == foreign(Image.owner_id), Image.owner_type == 'doctor')",
                          lazy="select", viewonly=True)
 
@@ -113,17 +113,22 @@ class Treatment(Base):
 class PackageBooking(Base):
     __tablename__ = "package_bookings"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(250), nullable=False)
+    first_name = Column(String(150), nullable=False)
+    last_name = Column(String(150), nullable=False)
     email = Column(String(300), nullable=False, index=True)
-    phone = Column(String(80), nullable=False)
-    service_type = Column(String(100), nullable=True)      # "hospital","doctor","treatment","other"
-    service_ref = Column(String(300), nullable=True)       # referenced id or name string
-    budget_range = Column(String(100), nullable=True)      # e.g., "5k-10k"
-    medical_history_file = Column(String(1000), nullable=True)
+    mobile_no = Column(String(80), nullable=False)
+    treatment_id = Column(Integer, ForeignKey("treatments.id", ondelete="SET NULL"), nullable=True, index=True)  # Selected treatment with ID
+    budget = Column(String(100), nullable=True)            # Budget as string (e.g., "10k-20k", "Under 50k")
+    medical_history_file = Column(String(1000), nullable=True)  # PDF or image file path
+    doctor_preference = Column(String(300), nullable=True)  # Doctor preference input string
+    hospital_preference = Column(String(300), nullable=True)  # Hospital preference string
     user_query = Column(Text, nullable=True)
     travel_assistant = Column(Boolean, default=False)
     stay_assistant = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    treatment = relationship("Treatment", lazy="noload")
 
 
 class Admin(Base):
@@ -172,4 +177,31 @@ class Offer(Base):
     treatment = relationship("Treatment", lazy="noload")
     images = relationship("Image", 
                          primaryjoin="and_(Offer.id == foreign(Image.owner_id), Image.owner_type == 'offer')",
+                         lazy="select", viewonly=True)
+
+
+class Blog(Base):
+    __tablename__ = "blogs"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False, index=True)
+    subtitle = Column(String(1000), nullable=True)
+    slug = Column(String(600), nullable=False, unique=True, index=True)  # URL-friendly version of title
+    content = Column(Text, nullable=False)  # Rich HTML content from text editor
+    excerpt = Column(Text, nullable=True)  # Short summary/preview
+    featured_image = Column(String(1000), nullable=True)  # Main blog image
+    meta_description = Column(String(500), nullable=True)  # SEO meta description
+    tags = Column(String(1000), nullable=True)  # comma-separated tags
+    category = Column(String(200), nullable=True, index=True)  # blog category
+    author_name = Column(String(200), nullable=True)  # author name
+    reading_time = Column(Integer, nullable=True)  # estimated reading time in minutes
+    view_count = Column(Integer, default=0)  # number of views
+    is_published = Column(Boolean, default=False, index=True)  # published status
+    is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
+    published_at = Column(DateTime, nullable=True, index=True)  # publication date
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    images = relationship("Image", 
+                         primaryjoin="and_(Blog.id == foreign(Image.owner_id), Image.owner_type == 'blog')",
                          lazy="select", viewonly=True)

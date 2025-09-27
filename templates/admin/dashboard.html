@@ -2,20 +2,14 @@
 
 {% block title %}Dashboard - Medi-Tour Admin{% endblock %}
 
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3 mb-0">
-                <i class="fas fa-tachometer-alt me-2 text-primary"></i>
-                Dashboard
-            </h1>
-            <div class="text-muted">
-                <i class="fas fa-clock me-1"></i>
-                {{ datetime.now().strftime("%Y-%m-%d %H:%M") }}
-            </div>
-        </div>
-    </div>
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Welcome back, {{ admin.username }}. Here's what's happening with your medical tourism platform.</p>
 </div>
 
 <!-- Statistics Cards -->
@@ -121,6 +115,46 @@
     </div>
     
     <div class="col-xl-2 col-md-4 col-sm-6 mb-3">
+        <div class="card bg-danger text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="h4 mb-0">{{ stats.bookings or 0 }}</div>
+                        <div class="small">Bookings</div>
+                    </div>
+                    <div class="fa-2x">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link" href="/admin/bookings">View Details</a>
+                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-md-4 col-sm-6 mb-3">
+        <div class="card bg-dark text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="h4 mb-0">{{ stats.blogs or 0 }}</div>
+                        <div class="small">Blogs</div>
+                    </div>
+                    <div class="fa-2x">
+                        <i class="fas fa-blog"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link" href="/admin/blogs">View Details</a>
+                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-md-4 col-sm-6 mb-3">
         <div class="card bg-secondary text-white h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -165,7 +199,7 @@
 
 <div class="row">
     <!-- Recent Contacts -->
-    <div class="col-lg-8">
+    <div class="col-lg-6">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -227,8 +261,81 @@
         </div>
     </div>
     
+    <!-- Recent Bookings -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-calendar-check me-2"></i>
+                    Recent Package Bookings
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if stats.recent_bookings %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Treatment</th>
+                                <th>Budget</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in stats.recent_bookings %}
+                            <tr>
+                                <td>
+                                    <strong>{{ booking.first_name }} {{ booking.last_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ booking.mobile_no }}</small>
+                                </td>
+                                <td>
+                                    {% if booking.treatment %}
+                                        {{ booking.treatment.name[:25] }}{% if booking.treatment.name|length > 25 %}...{% endif %}
+                                    {% else %}
+                                        <span class="text-muted">No treatment selected</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ booking.budget or 'Not specified' }}</span>
+                                </td>
+                                <td>
+                                    <small>{{ booking.created_at.strftime("%Y-%m-%d") }}</small>
+                                    <br>
+                                    <small class="text-muted">{{ booking.created_at.strftime("%H:%M") }}</small>
+                                </td>
+                                <td>
+                                    <a href="/admin/bookings" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-calendar fa-3x mb-3"></i>
+                    <p>No package bookings yet</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="/admin/bookings" class="btn btn-danger">
+                    <i class="fas fa-calendar-check me-1"></i>
+                    View All Bookings
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
     <!-- Quick Actions -->
-    <div class="col-lg-4">
+    <div class="col-lg-6">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -260,9 +367,11 @@
                 </div>
             </div>
         </div>
-        
-        <!-- System Info -->
-        <div class="card mt-3">
+    </div>
+    
+    <!-- System Info -->
+    <div class="col-lg-6">
+        <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="fas fa-info-circle me-2"></i>

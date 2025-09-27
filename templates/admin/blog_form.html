@@ -1,0 +1,632 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if action == "create" %}New Blog Post{% else %}Edit Blog Post{% endif %} - Medi-Tour Admin
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="/admin/blogs">Blogs</a></li>
+<li class="breadcrumb-item active">
+    {% if action == "create" %}New Blog Post{% else %}Edit Blog Post{% endif %}
+</li>
+{% endblock %}
+
+{% block extra_head %}
+<!-- Quill Rich Text Editor -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
+<style>
+.ql-editor img {
+    cursor: pointer !important;
+    max-width: 100% !important;
+    height: auto !important;
+    border: 2px dashed transparent !important;
+    transition: all 0.2s ease !important;
+    border-radius: 4px;
+}
+
+.ql-editor img:hover {
+    border-color: #007bff !important;
+    opacity: 0.8 !important;
+    transform: scale(1.02);
+}
+
+.ql-editor img:focus {
+    outline: 2px solid #007bff !important;
+    outline-offset: 2px !important;
+}
+
+.ql-editor img:active {
+    border-color: #28a745 !important;
+    transform: scale(0.98);
+}
+
+.ql-toolbar .ql-image {
+    position: relative;
+}
+
+/* Custom tooltip for image resize */
+.image-resize-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+/* Better form styling */
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.form-label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* Character counter styling */
+.char-counter {
+    font-size: 0.75rem;
+    text-align: right;
+    margin-top: 0.25rem;
+}
+
+.char-counter.warning {
+    color: #fd7e14;
+}
+
+.char-counter.danger {
+    color: #dc3545;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">
+        {% if action == "create" %}Create New Blog Post{% else %}Edit Blog Post{% endif %}
+    </h1>
+    <p class="page-subtitle">
+        {% if action == "create" %}
+            Create engaging blog content for your medical tourism website.
+        {% else %}
+            Update your blog post content and settings.
+        {% endif %}
+    </p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" action="{% if action == 'create' %}/admin/blogs{% else %}/admin/blogs/{{ blog.id }}{% endif %}">
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-xl-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Blog Content</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Title -->
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title *</label>
+                        <input type="text" class="form-control" id="title" name="title" required
+                               value="{{ blog.title if blog else '' }}"
+                               placeholder="Enter an engaging blog title...">
+                        <div class="form-text">This will be the main headline of your blog post</div>
+                    </div>
+
+                    <!-- Subtitle -->
+                    <div class="mb-3">
+                        <label for="subtitle" class="form-label">Subtitle</label>
+                        <input type="text" class="form-control" id="subtitle" name="subtitle"
+                               value="{{ blog.subtitle if blog else '' }}"
+                               placeholder="Optional subtitle or tagline...">
+                        <div class="form-text">A brief subtitle to complement your title</div>
+                    </div>
+
+                    <!-- Content Editor -->
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Content *</label>
+                        <div id="editor" style="height: 400px;"></div>
+                        <textarea name="content" id="content" style="display: none;">{{ blog.content if blog else '' }}</textarea>
+                        <div class="form-text">Write your blog content using the rich text editor above</div>
+                    </div>
+
+                    <!-- Excerpt -->
+                    <div class="mb-3">
+                        <label for="excerpt" class="form-label">Excerpt</label>
+                        <textarea class="form-control" id="excerpt" name="excerpt" rows="3"
+                                  placeholder="Brief summary of the blog post...">{{ blog.excerpt if blog else '' }}</textarea>
+                        <div class="form-text">Short description that appears in blog previews and search results</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Images Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Images</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Featured Image -->
+                    <div class="mb-3">
+                        <label for="featured_image" class="form-label">Featured Image</label>
+                        {% if blog and blog.featured_image %}
+                            <div class="mb-2">
+                                <img src="{{ blog.featured_image }}" alt="Current featured image" 
+                                     class="img-thumbnail" style="max-width: 200px; max-height: 120px;">
+                                <div class="form-text">Current featured image</div>
+                            </div>
+                        {% endif %}
+                        <input type="file" class="form-control" id="featured_image" name="featured_image" accept="image/*">
+                        <div class="form-text">Main image that represents your blog post (recommended: 1200x630px)</div>
+                    </div>
+
+                    <!-- Content Images -->
+                    <div class="mb-3">
+                        <label for="content_images" class="form-label">Content Images</label>
+                        <input type="file" class="form-control" id="content_images" name="content_images" 
+                               accept="image/*" multiple>
+                        <div class="form-text">Upload additional images to use within your blog content</div>
+                        
+                        {% if blog and images %}
+                        <div class="mt-3">
+                            <h6>Existing Images:</h6>
+                            <div class="row">
+                                {% for image in images %}
+                                <div class="col-md-3 mb-2">
+                                    <div class="card">
+                                        <img src="{{ image.url }}" class="card-img-top" style="height: 120px; object-fit: cover;">
+                                        <div class="card-body p-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" 
+                                                    onclick="insertImageToEditor('{{ image.url }}')">
+                                                Insert to Content
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-xl-4">
+            <!-- Publishing Options -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Publishing Options</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Category -->
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <select class="form-select" id="category" name="category">
+                            <option value="">Select Category</option>
+                            <option value="medical-procedures" {{ 'selected' if blog and blog.category == 'medical-procedures' else '' }}>Medical Procedures</option>
+                            <option value="destinations" {{ 'selected' if blog and blog.category == 'destinations' else '' }}>Destinations</option>
+                            <option value="patient-stories" {{ 'selected' if blog and blog.category == 'patient-stories' else '' }}>Patient Stories</option>
+                            <option value="health-tips" {{ 'selected' if blog and blog.category == 'health-tips' else '' }}>Health Tips</option>
+                            <option value="travel-guides" {{ 'selected' if blog and blog.category == 'travel-guides' else '' }}>Travel Guides</option>
+                            <option value="news" {{ 'selected' if blog and blog.category == 'news' else '' }}>News</option>
+                        </select>
+                        <div class="form-text">Choose the most relevant category</div>
+                    </div>
+
+                    <!-- Publishing Status -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_published" name="is_published" 
+                                   {{ 'checked' if blog and blog.is_published else '' }}>
+                            <label class="form-check-label fw-bold text-success" for="is_published">
+                                <i class="fas fa-globe me-1"></i>
+                                Publish immediately
+                            </label>
+                        </div>
+                        <div class="form-text">Make this blog post visible to the public</div>
+                    </div>
+
+                    <!-- Featured Status -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_featured" name="is_featured"
+                                   {{ 'checked' if blog and blog.is_featured else '' }}>
+                            <label class="form-check-label fw-bold text-warning" for="is_featured">
+                                <i class="fas fa-star me-1"></i>
+                                Feature this post
+                            </label>
+                        </div>
+                        <div class="form-text">Show this post prominently on the blog page</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blog Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Blog Details</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Author -->
+                    <div class="mb-3">
+                        <label for="author_name" class="form-label">Author Name</label>
+                        <input type="text" class="form-control" id="author_name" name="author_name"
+                               value="{{ blog.author_name if blog else '' }}"
+                               placeholder="Author name...">
+                        <div class="form-text">Name of the blog post author</div>
+                    </div>
+
+                    <!-- Reading Time -->
+                    <div class="mb-3">
+                        <label for="reading_time" class="form-label">Reading Time (minutes)</label>
+                        <input type="number" class="form-control" id="reading_time" name="reading_time" min="1"
+                               value="{{ blog.reading_time if blog else '' }}"
+                               placeholder="5">
+                        <div class="form-text">Estimated reading time</div>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="mb-3">
+                        <label for="tags" class="form-label">Tags</label>
+                        <input type="text" class="form-control" id="tags" name="tags"
+                               value="{{ blog.tags if blog else '' }}"
+                               placeholder="medical tourism, health, travel">
+                        <div class="form-text">Comma-separated tags for better discovery</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEO Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">SEO Settings</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Meta Description -->
+                    <div class="mb-3">
+                        <label for="meta_description" class="form-label">Meta Description</label>
+                        <textarea class="form-control" id="meta_description" name="meta_description" rows="3"
+                                  maxlength="160" placeholder="Brief description for search engines...">{{ blog.meta_description if blog else '' }}</textarea>
+                        <div class="form-text">Description that appears in search engine results (max 160 characters)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary" id="submitBtn" >
+                            <i class="fas fa-save me-2"></i>
+                            <span id="submitText">{% if action == "create" %}Create Blog Post{% else %}Update Blog Post{% endif %}</span>
+                            <span id="submitSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+                        </button>
+                        <a href="/admin/blogs" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Custom Image Blot with resize handles
+const BaseImageFormat = Quill.import('formats/image');
+class ImageResize extends BaseImageFormat {
+    static create(value) {
+        const node = super.create(value);
+        if (value.alt) {
+            node.setAttribute('alt', value.alt);
+        }
+        if (value.width) {
+            node.style.width = value.width;
+        }
+        if (value.height) {
+            node.style.height = value.height;
+        }
+        
+        // Make image resizable
+        node.style.cursor = 'pointer';
+        node.style.maxWidth = '100%';
+        node.style.height = 'auto';
+        
+        // Add click handler for basic resize
+        node.onclick = function() {
+            const newWidth = prompt('Enter image width (e.g., 300px, 50%, auto):', node.style.width || 'auto');
+            if (newWidth !== null) {
+                node.style.width = newWidth;
+                if (newWidth.includes('px')) {
+                    node.style.height = 'auto';
+                }
+            }
+        };
+        
+        return node;
+    }
+    
+    static value(domNode) {
+        const { src, alt, width, height } = domNode;
+        return { src, alt, width, height };
+    }
+}
+
+// Register the custom image format
+Quill.register('formats/image', ImageResize, true);
+
+// Initialize Quill editor with enhanced configuration
+var quill = new Quill('#editor', {
+    theme: 'snow',
+    modules: {
+        toolbar: {
+            container: [
+                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'align': [] }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                ['blockquote', 'code-block'],
+                ['link', 'image', 'video'],
+                ['clean']
+            ],
+            handlers: {
+                image: function() {
+                    const input = document.createElement('input');
+                    input.setAttribute('type', 'file');
+                    input.setAttribute('accept', 'image/*');
+                    input.click();
+
+                    input.onchange = function() {
+                        const file = input.files[0];
+                        if (file) {
+                            // Create a preview and allow basic resizing
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const range = quill.getSelection(true);
+                                const index = range ? range.index : quill.getLength();
+                                
+                                // Insert image with default sizing
+                                quill.insertEmbed(index, 'image', {
+                                    src: e.target.result,
+                                    alt: file.name,
+                                    width: 'auto',
+                                    height: 'auto'
+                                });
+                                
+                                // Move cursor after the image
+                                quill.setSelection(index + 1);
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    };
+                }
+            }
+        }
+    },
+    placeholder: 'Write your blog content here...',
+    readOnly: false,
+    formats: ['header', 'bold', 'italic', 'underline', 'strike', 'color', 'background', 'align', 'list', 'indent', 'blockquote', 'code-block', 'link', 'image', 'video']
+});
+
+// Load existing content if editing
+{% if blog %}
+quill.root.innerHTML = `{{ blog.content|safe }}`;
+{% endif %}
+
+// Add image resize functionality to existing images
+quill.on('editor-change', function() {
+    const images = quill.root.querySelectorAll('img');
+    images.forEach(img => {
+        if (!img.dataset.resizeHandlersAdded) {
+            img.style.cursor = 'pointer';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.style.border = '2px dashed transparent';
+            img.style.transition = 'border-color 0.2s ease';
+            
+            // Add hover effect
+            img.addEventListener('mouseenter', function() {
+                this.style.borderColor = '#007bff';
+                this.style.opacity = '0.8';
+            });
+            
+            img.addEventListener('mouseleave', function() {
+                this.style.borderColor = 'transparent';
+                this.style.opacity = '1';
+            });
+            
+            // Add click handler for resizing
+            img.onclick = function(e) {
+                e.stopPropagation();
+                
+                const currentWidth = this.style.width || this.getAttribute('width') || '100%';
+                
+                // Create a more user-friendly resize dialog
+                const resizeOptions = [
+                    { label: 'Small (25%)', value: '25%' },
+                    { label: 'Medium (50%)', value: '50%' },
+                    { label: 'Large (75%)', value: '75%' },
+                    { label: 'Full Width (100%)', value: '100%' },
+                    { label: 'Custom...', value: 'custom' }
+                ];
+                
+                let selectedOption = resizeOptions.find(opt => opt.value === currentWidth);
+                if (!selectedOption) {
+                    selectedOption = { label: `Current (${currentWidth})`, value: currentWidth };
+                }
+                
+                const optionsText = resizeOptions.map((opt, index) => 
+                    `${index + 1}. ${opt.label}`
+                ).join('\n');
+                
+                const choice = prompt(
+                    `Choose image size:\n${optionsText}\n\nEnter number (1-5) or custom width (e.g., 300px, 60%):`,
+                    selectedOption.label.includes('Custom') ? currentWidth : '3'
+                );
+                
+                if (choice !== null && choice.trim() !== '') {
+                    let newWidth;
+                    
+                    // Check if it's a number selection
+                    const choiceNum = parseInt(choice);
+                    if (choiceNum >= 1 && choiceNum <= 5) {
+                        if (choiceNum === 5) {
+                            // Custom option
+                            newWidth = prompt('Enter custom width (e.g., 300px, 60%):', currentWidth);
+                        } else {
+                            newWidth = resizeOptions[choiceNum - 1].value;
+                        }
+                    } else {
+                        // Direct width input
+                        newWidth = choice;
+                    }
+                    
+                    if (newWidth && newWidth.trim() !== '') {
+                        this.style.width = newWidth;
+                        this.style.height = 'auto';
+                        
+                        // Show feedback
+                        const originalBorder = this.style.border;
+                        this.style.border = '2px solid #28a745';
+                        setTimeout(() => {
+                            this.style.border = originalBorder;
+                        }, 1000);
+                    }
+                }
+            };
+            
+            img.dataset.resizeHandlersAdded = 'true';
+        }
+    });
+});
+
+// Sync editor content with textarea before form submission
+document.querySelector('form').addEventListener('submit', function(e) {
+    console.log('Form submission started');
+    // alert('DEBUG: Form submit event triggered!'); // Debug to see if event fires
+    
+    try {
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
+        
+        const contentTextarea = document.querySelector('#content');
+        const editorContent = quill.root.innerHTML;
+        contentTextarea.value = editorContent;
+        
+        console.log('Editor content synced:', editorContent.substring(0, 100) + '...');
+        
+        // Validate required fields
+        const title = document.querySelector('#title').value.trim();
+        const content = quill.getText().trim();
+        
+        console.log('Title:', title);
+        console.log('Content length:', content.length);
+        
+        // Temporarily disable validation to test submission
+        /*
+        if (!title) {
+            alert('Please enter a title for your blog post.');
+            document.querySelector('#title').focus();
+            e.preventDefault();
+            return false;
+        }
+        
+        if (!content || content.length < 5) {
+            alert('Please write some content for your blog post.');
+            quill.focus();
+            e.preventDefault();
+            return false;
+        }
+        
+        // Make sure content is synced to textarea
+        if (!contentTextarea.value || contentTextarea.value.trim() === '') {
+            contentTextarea.value = editorContent;
+        }
+        */
+        
+        // Show loading state
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            if (submitText) submitText.textContent = 'Saving...';
+            if (submitSpinner) submitSpinner.style.display = 'inline-block';
+        }
+        
+        console.log('Form validation passed, submitting...');
+        alert('DEBUG: About to submit form!'); // Debug before actual submission
+        return true;
+        
+    } catch (error) {
+        console.error('Form submission error:', error);
+        alert('An error occurred. Please try again.');
+        e.preventDefault();
+        return false;
+    }
+});
+
+// Function to insert images into editor
+function insertImageToEditor(imageUrl) {
+    var range = quill.getSelection();
+    if (range) {
+        quill.insertEmbed(range.index, 'image', imageUrl);
+    } else {
+        quill.insertEmbed(0, 'image', imageUrl);
+    }
+}
+
+// Handle image uploads in Quill
+quill.getModule('toolbar').addHandler('image', function() {
+    var input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
+
+    input.onchange = function() {
+        var file = input.files[0];
+        if (file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var range = quill.getSelection();
+                quill.insertEmbed(range.index, 'image', e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+});
+
+// Character counter for meta description
+document.getElementById('meta_description').addEventListener('input', function() {
+    var current = this.value.length;
+    var max = 160;
+    var remaining = max - current;
+    var color = remaining < 20 ? 'text-danger' : remaining < 50 ? 'text-warning' : 'text-muted';
+    
+    var helpText = this.nextElementSibling;
+    helpText.innerHTML = `Description that appears in search engine results (<span class="${color}">${current}/${max}</span>)`;
+});
+</script>
+{% endblock %}

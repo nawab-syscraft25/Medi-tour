@@ -1,16 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Medi-Tour Admin{% endblock %}</title>
-
+    
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-
+    
     <style>
         :root {
             --sidebar-width: 280px;
@@ -19,12 +18,12 @@
             --sidebar-active: #3b82f6;
             --topbar-height: 70px;
         }
-
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f8fafc;
         }
-
+        
         .sidebar {
             position: fixed;
             top: 0;
@@ -38,20 +37,20 @@
             scrollbar-width: thin;
             scrollbar-color: #475569 transparent;
         }
-
+        
         .sidebar::-webkit-scrollbar {
             width: 6px;
         }
-
+        
         .sidebar::-webkit-scrollbar-track {
             background: transparent;
         }
-
+        
         .sidebar::-webkit-scrollbar-thumb {
             background: #475569;
             border-radius: 3px;
         }
-
+        
         .sidebar-brand {
             padding: 1.5rem 1rem;
             border-bottom: 1px solid #334155;
@@ -59,26 +58,26 @@
             text-decoration: none;
             display: block;
         }
-
+        
         .sidebar-brand:hover {
             color: #e2e8f0;
         }
-
+        
         .sidebar-brand h4 {
             margin: 0;
             font-weight: 600;
         }
-
+        
         .sidebar-nav {
             padding: 1rem 0;
             list-style: none;
             margin: 0;
         }
-
+        
         .nav-item {
             margin: 0.25rem 0;
         }
-
+        
         .nav-link {
             display: flex;
             align-items: center;
@@ -89,17 +88,17 @@
             border-radius: 0;
             position: relative;
         }
-
+        
         .nav-link:hover {
             background: var(--sidebar-hover);
             color: white;
         }
-
+        
         .nav-link.active {
             background: var(--sidebar-active);
             color: white;
         }
-
+        
         .nav-link.active::before {
             content: '';
             position: absolute;
@@ -109,13 +108,13 @@
             width: 4px;
             background: #60a5fa;
         }
-
+        
         .nav-link i {
             width: 20px;
             margin-right: 0.75rem;
             text-align: center;
         }
-
+        
         .nav-group-title {
             padding: 1rem 1.5rem 0.5rem;
             color: #64748b;
@@ -124,13 +123,13 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-
+        
         .main-content {
             margin-left: var(--sidebar-width);
             min-height: 100vh;
             background: #f8fafc;
         }
-
+        
         .topbar {
             background: white;
             height: var(--topbar-height);
@@ -141,12 +140,12 @@
             padding: 0 2rem;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
-
+        
         .topbar-left {
             display: flex;
             align-items: center;
         }
-
+        
         .sidebar-toggle {
             background: none;
             border: none;
@@ -158,39 +157,39 @@
             border-radius: 0.375rem;
             transition: all 0.2s ease;
         }
-
+        
         .sidebar-toggle:hover {
             background: #f1f5f9;
             color: #1e293b;
         }
-
+        
         .breadcrumb {
             background: none;
             padding: 0;
             margin: 0;
             font-size: 0.875rem;
         }
-
+        
         .breadcrumb-item a {
             color: #64748b;
             text-decoration: none;
         }
-
+        
         .breadcrumb-item.active {
             color: #1e293b;
             font-weight: 500;
         }
-
+        
         .topbar-right {
             display: flex;
             align-items: center;
             margin-left: auto;
         }
-
+        
         .user-dropdown {
             position: relative;
         }
-
+        
         .user-dropdown-toggle {
             display: flex;
             align-items: center;
@@ -201,11 +200,11 @@
             transition: all 0.2s ease;
             cursor: pointer;
         }
-
+        
         .user-dropdown-toggle:hover {
             background: #f1f5f9;
         }
-
+        
         .user-avatar {
             width: 36px;
             height: 36px;
@@ -218,310 +217,181 @@
             font-weight: 600;
             margin-right: 0.75rem;
         }
-
+        
         .user-info h6 {
             margin: 0;
             font-size: 0.875rem;
             font-weight: 600;
             color: #1e293b;
         }
-
+        
         .user-info small {
             color: #64748b;
             font-size: 0.75rem;
         }
-
+        
         .content-area {
             padding: 2rem;
         }
-
+        
         .page-header {
             margin-bottom: 2rem;
         }
-
+        
         .page-title {
             font-size: 1.875rem;
             font-weight: 700;
             color: #1e293b;
             margin: 0 0 0.5rem 0;
         }
-
+        
         .page-subtitle {
             color: #64748b;
             font-size: 1rem;
             margin: 0;
         }
-
+        
         .card {
             border: none;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             border-radius: 0.75rem;
         }
-
+        
         .card-header {
             background: white;
             border-bottom: 1px solid #e2e8f0;
             font-weight: 600;
             border-radius: 0.75rem 0.75rem 0 0 !important;
         }
-
+        
         .btn-primary {
             background: #3b82f6;
             border-color: #3b82f6;
         }
-
+        
         .btn-primary:hover {
             background: #2563eb;
             border-color: #2563eb;
         }
-
+        
         .sidebar-collapsed {
             width: 80px;
         }
-
+        
         .sidebar-collapsed .sidebar-brand h4,
         .sidebar-collapsed .nav-link span,
         .sidebar-collapsed .nav-group-title {
             display: none;
         }
-
+        
         .sidebar-collapsed .nav-link {
             justify-content: center;
             padding-left: 1rem;
             padding-right: 1rem;
         }
-
+        
         .sidebar-collapsed .nav-link i {
             margin-right: 0;
         }
-
-        .sidebar-collapsed+.main-content {
+        
+        .sidebar-collapsed + .main-content {
             margin-left: 80px;
         }
-
-        /* Mobile Responsive */
+        
         @media (max-width: 768px) {
-            :root {
-                --sidebar-width: 280px;
-                --topbar-height: 60px;
-            }
-
             .sidebar {
                 transform: translateX(-100%);
-                z-index: 1050;
-                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
             }
-
+            
             .sidebar.show {
                 transform: translateX(0);
             }
-
+            
             .main-content {
                 margin-left: 0;
             }
-
-            .sidebar-collapsed+.main-content {
-                margin-left: 0;
-            }
-
+            
             .content-area {
                 padding: 1rem;
             }
-
-            .topbar {
-                padding: 0 1rem;
-                height: var(--topbar-height);
-            }
-
-            .page-title {
-                font-size: 1.5rem;
-            }
-
-            .sidebar-toggle {
-                display: block !important;
-            }
-
-            /* Mobile overlay */
-            .sidebar-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 1040;
-                opacity: 0;
-                visibility: hidden;
-                transition: all 0.3s ease;
-            }
-
-            .sidebar-overlay.show {
-                opacity: 1;
-                visibility: visible;
-            }
-
-            /* Hide collapse button on mobile */
-            .sidebar-toggle.collapse-btn {
-                display: none !important;
-            }
-
-            /* Responsive tables */
-            .table-responsive {
-                font-size: 0.875rem;
-            }
-
-            .table th,
-            .table td {
-                padding: 0.5rem 0.25rem;
-                white-space: nowrap;
-            }
-
-            /* Responsive cards */
-            .card {
-                margin-bottom: 1rem;
-            }
-
-            /* Responsive buttons */
-            .btn-group-vertical .btn {
-                margin-bottom: 0.25rem;
-            }
-
-            /* Responsive forms */
-            .form-control,
-            .form-select {
-                font-size: 16px;
-                /* Prevents zoom on iOS */
-            }
-
-            /* User dropdown adjustments */
-            .user-dropdown-toggle {
-                padding: 0.25rem 0.5rem;
-            }
-
-            .user-avatar {
-                width: 32px;
-                height: 32px;
-                margin-right: 0.5rem;
-            }
-
-            .user-info h6 {
-                font-size: 0.8rem;
-            }
-
-            .user-info small {
-                font-size: 0.7rem;
-            }
-        }
-
-        @media (min-width: 769px) {
-            .sidebar-toggle {
-                display: none;
-            }
-
-            .sidebar-overlay {
-                display: none !important;
-            }
-        }
-
-        /* Tablet adjustments */
-        @media (max-width: 992px) and (min-width: 769px) {
-            .content-area {
-                padding: 1.5rem;
-            }
-        }
-
-        .logo .sidebar-brand {
-            display: flex;
-            align-items: center;
-            text-decoration: none;
-            /* optional: removes underline */
-        }
-
-        .logo h4 {
-            margin: 0;
-            /* removes default <h4> margins */
         }
     </style>
-
+    
     {% block extra_head %}{% endblock %}
 </head>
-
 <body>
     {% if admin %}
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
-        <div class="logo">
-            <a href="/admin/dashboard" class="sidebar-brand d-flex align-items-center">
-                <i class="fas fa-hospital-alt me-2"></i>
-                <h4 class="mb-0">Medi-Tour</h4>
-            </a>
-        </div>
-
-
-
+    nawab
+        <a href="/admin/dashboard" class="sidebar-brand">
+            <i class="fas fa-hospital-alt me-2"></i>
+            <h4>Medi-Tour nawab</h4>
+        </a>
+        
         <ul class="sidebar-nav">
             <li class="nav-item">
-                <a class="nav-link {% if request.url.path == '/admin/dashboard' %}active{% endif %}"
-                    href="/admin/dashboard">
+                <a class="nav-link {% if request.url.path == '/admin/dashboard' %}active{% endif %}" 
+                   href="/admin/dashboard">
                     <i class="fas fa-tachometer-alt"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
-
+            
             <div class="nav-group-title">Content Management</div>
-
+            
             <li class="nav-item">
-                <a class="nav-link {% if '/hospitals' in request.url.path %}active{% endif %}" href="/admin/hospitals">
+                <a class="nav-link {% if '/hospitals' in request.url.path %}active{% endif %}" 
+                   href="/admin/hospitals">
                     <i class="fas fa-hospital"></i>
                     <span>Hospitals</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if '/doctors' in request.url.path %}active{% endif %}" href="/admin/doctors">
+                <a class="nav-link {% if '/doctors' in request.url.path %}active{% endif %}" 
+                   href="/admin/doctors">
                     <i class="fas fa-user-md"></i>
                     <span>Doctors</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if '/treatments' in request.url.path %}active{% endif %}"
-                    href="/admin/treatments">
+                <a class="nav-link {% if '/treatments' in request.url.path %}active{% endif %}" 
+                   href="/admin/treatments">
                     <i class="fas fa-procedures"></i>
                     <span>Treatments</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if '/offers' in request.url.path %}active{% endif %}" href="/admin/offers">
+                <a class="nav-link {% if '/offers' in request.url.path %}active{% endif %}" 
+                   href="/admin/offers">
                     <i class="fas fa-gift"></i>
                     <span>Offers & Packages</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if '/blogs' in request.url.path %}active{% endif %}" href="/admin/blogs">
-                    <i class="fas fa-blog"></i>
-                    <span>Blogs</span>
-                </a>
-            </li>
-
+            
             <div class="nav-group-title">Customer Relations</div>
-
+            
             <li class="nav-item">
-                <a class="nav-link {% if '/bookings' in request.url.path %}active{% endif %}" href="/admin/bookings">
+                <a class="nav-link {% if '/bookings' in request.url.path %}active{% endif %}" 
+                   href="/admin/bookings">
                     <i class="fas fa-calendar-check"></i>
                     <span>Package Bookings</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if '/contacts' in request.url.path %}active{% endif %}" href="/admin/contacts">
+                <a class="nav-link {% if '/contacts' in request.url.path %}active{% endif %}" 
+                   href="/admin/contacts">
                     <i class="fas fa-envelope"></i>
                     <span>Contact Inquiries</span>
                 </a>
             </li>
-
+            
             {% if admin.is_super_admin %}
             <div class="nav-group-title">System Administration</div>
-
+            
             <li class="nav-item">
-                <a class="nav-link {% if '/admins' in request.url.path %}active{% endif %}" href="/admin/admins">
+                <a class="nav-link {% if '/admins' in request.url.path %}active{% endif %}" 
+                   href="/admin/admins">
                     <i class="fas fa-users-cog"></i>
                     <span>Admin Users</span>
                 </a>
@@ -529,10 +399,7 @@
             {% endif %}
         </ul>
     </div>
-
-    <!-- Mobile Overlay -->
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
+    
     <!-- Main Content -->
     <div class="main-content" id="main-content">
         <!-- Top Bar -->
@@ -548,7 +415,7 @@
                     </ol>
                 </nav>
             </div>
-
+            
             <div class="topbar-right">
                 <div class="user-dropdown dropdown">
                     <button class="user-dropdown-toggle" data-bs-toggle="dropdown">
@@ -564,21 +431,17 @@
                         <i class="fas fa-chevron-down ms-2"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li>
-                            <h6 class="dropdown-header">{{ admin.email }}</h6>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
+                        <li><h6 class="dropdown-header">{{ admin.email }}</h6></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="/admin/logout">
-                                <i class="fas fa-sign-out-alt me-2"></i>
-                                Sign Out
-                            </a></li>
+                            <i class="fas fa-sign-out-alt me-2"></i>
+                            Sign Out
+                        </a></li>
                     </ul>
                 </div>
             </div>
         </div>
-
+        
         <!-- Content Area -->
         <div class="content-area">
             <!-- Flash Messages -->
@@ -589,7 +452,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
             {% endif %}
-
+            
             {% if success %}
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <i class="fas fa-check-circle me-2"></i>
@@ -612,7 +475,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
         {% endif %}
-
+        
         {% if success %}
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle me-2"></i>
@@ -621,121 +484,54 @@
         </div>
         {% endif %}
 
-        {% block login_content %}{% endblock %}
+        {% block content %}{% endblock %}
     </main>
     {% endif %}
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
+    
     <script>
         // Sidebar toggle functionality
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            const body = document.body;
-
-            // Check if mobile view
-            if (window.innerWidth <= 768) {
-                // Mobile: toggle sidebar visibility with overlay
-                sidebar.classList.toggle('show');
-                overlay.classList.toggle('show');
-
-                // Prevent body scroll when sidebar is open
-                if (sidebar.classList.contains('show')) {
-                    body.style.overflow = 'hidden';
-                } else {
-                    body.style.overflow = '';
-                }
-            } else {
-                // Desktop: toggle sidebar collapsed state
-                sidebar.classList.toggle('sidebar-collapsed');
-            }
+            const mainContent = document.getElementById('main-content');
+            
+            sidebar.classList.toggle('sidebar-collapsed');
         }
-
-        // Close sidebar (mobile)
-        function closeSidebar() {
+        
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            const body = document.body;
-
-            sidebar.classList.remove('show');
-            overlay.classList.remove('show');
-            body.style.overflow = ''; // Restore body scroll
+            sidebar.classList.toggle('show');
         }
-
+        
         // Handle responsive behavior
-        window.addEventListener('resize', function () {
+        window.addEventListener('resize', function() {
             const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            const body = document.body;
-
             if (window.innerWidth > 768) {
-                // Desktop view: hide mobile elements
                 sidebar.classList.remove('show');
-                overlay.classList.remove('show');
-                body.style.overflow = ''; // Restore body scroll
-            } else {
-                // Mobile view: remove collapsed state
-                sidebar.classList.remove('sidebar-collapsed');
             }
         });
-
-        // Handle keyboard events (ESC to close mobile sidebar)
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && window.innerWidth <= 768) {
-                closeSidebar();
-            }
-        });
-
-        // Touch gestures for mobile sidebar
-        let touchStartX = 0;
-        let touchEndX = 0;
-
-        document.addEventListener('touchstart', function (e) {
-            touchStartX = e.changedTouches[0].screenX;
-        });
-
-        document.addEventListener('touchend', function (e) {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        });
-
-        function handleSwipe() {
-            if (window.innerWidth <= 768) {
-                const sidebar = document.getElementById('sidebar');
-                const swipeDistance = touchEndX - touchStartX;
-
-                // Swipe right to open sidebar (from left edge)
-                if (swipeDistance > 50 && touchStartX < 50 && !sidebar.classList.contains('show')) {
-                    toggleSidebar();
-                }
-                // Swipe left to close sidebar
-                else if (swipeDistance < -50 && sidebar.classList.contains('show')) {
-                    closeSidebar();
-                }
-            }
-        }
-
+        
         // Initialize tooltips for collapsed sidebar
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl);
             });
         });
-
+        
         // Auto-dismiss alerts after 5 seconds
-        setTimeout(function () {
+        setTimeout(function() {
             var alerts = document.querySelectorAll('.alert');
-            alerts.forEach(function (alert) {
+            alerts.forEach(function(alert) {
                 var bsAlert = new bootstrap.Alert(alert);
                 bsAlert.close();
             });
         }, 5000);
     </script>
-
+    
     {% block extra_scripts %}{% endblock %}
 </body>
-
 </html>

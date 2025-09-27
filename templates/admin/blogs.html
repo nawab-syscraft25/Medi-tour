@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Blogs - Medi-Tour Admin{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Blogs</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Blog Management</h1>
+    <p class="page-subtitle">Create and manage blog posts for your medical tourism website.</p>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div></div>
+    <a href="/admin/blogs/new" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>
+        New Blog Post
+    </a>
+</div>
+
+<!-- Blog Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3 class="mb-0">{{ blogs|length }}</h3>
+                <p class="mb-0">Total Blogs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3 class="mb-0">{{ blogs|selectattr("is_published")|list|length }}</h3>
+                <p class="mb-0">Published</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3 class="mb-0">{{ blogs|rejectattr("is_published")|list|length }}</h3>
+                <p class="mb-0">Drafts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3 class="mb-0">{{ blogs|selectattr("is_featured")|list|length }}</h3>
+                <p class="mb-0">Featured</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Blogs Table -->
+<div class="card">
+    <div class="card-body">
+        {% if blogs %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Author</th>
+                        <th>Status</th>
+                        <th>Views</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for blog in blogs %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if blog.featured_image %}
+                                <img src="{{ blog.featured_image }}" alt="{{ blog.title }}" 
+                                     class="me-3 rounded" style="width: 60px; height: 40px; object-fit: cover;">
+                                {% else %}
+                                <div class="me-3 bg-light rounded d-flex align-items-center justify-content-center" 
+                                     style="width: 60px; height: 40px;">
+                                    <i class="fas fa-image text-muted"></i>
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <h6 class="mb-0">{{ blog.title[:50] }}{% if blog.title|length > 50 %}...{% endif %}</h6>
+                                    {% if blog.subtitle %}
+                                    <small class="text-muted">{{ blog.subtitle[:60] }}{% if blog.subtitle|length > 60 %}...{% endif %}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if blog.category %}
+                                <span class="badge bg-secondary">{{ blog.category }}</span>
+                            {% else %}
+                                <span class="text-muted">No category</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if blog.author_name %}
+                                {{ blog.author_name }}
+                            {% else %}
+                                <span class="text-muted">No author</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if blog.is_published %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    Published
+                                </span>
+                                {% if blog.is_featured %}
+                                <span class="badge bg-warning text-dark ms-1">
+                                    <i class="fas fa-star me-1"></i>
+                                    Featured
+                                </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Draft
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ blog.view_count }}</span>
+                        </td>
+                        <td>
+                            <small>{{ blog.created_at.strftime("%Y-%m-%d") }}</small>
+                            <br>
+                            <small class="text-muted">{{ blog.created_at.strftime("%H:%M") }}</small>
+                        </td>
+                        <td>
+                            <div class="btn-group-vertical btn-group-sm">
+                                <a href="/admin/blogs/{{ blog.id }}/edit" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="deleteBlog({{ blog.id }}, '{{ blog.title|e }}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <i class="fas fa-blog fa-3x text-muted"></i>
+            </div>
+            <h4 class="text-muted">No Blog Posts Found</h4>
+            <p class="text-muted">Start creating engaging blog content for your medical tourism website.</p>
+            <a href="/admin/blogs/new" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>
+                Create Your First Blog Post
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function deleteBlog(blogId, blogTitle) {
+    if (!confirm(`Are you sure you want to delete the blog post "${blogTitle}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/blogs/${blogId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete blog post. Please try again.');
+        }
+    } catch (error) {
+        alert('An error occurred while deleting the blog post.');
+    }
+}
+</script>
+{% endblock %}
