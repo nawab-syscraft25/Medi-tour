@@ -228,6 +228,18 @@ async def get_hospital(hospital_id: int, db: AsyncSession = Depends(get_db)):
     )
     images = images_result.scalars().all()
     
+    # Load FAQs for the hospital
+    faqs_result = await db.execute(
+        select(models.FAQ).where(
+            and_(
+                models.FAQ.owner_id == hospital.id,
+                models.FAQ.owner_type == 'hospital',
+                models.FAQ.is_active == True
+            )
+        ).order_by(models.FAQ.position)
+    )
+    faqs = faqs_result.scalars().all()
+    
     hospital_dict = hospital_to_dict(hospital)
     hospital_dict['images'] = [
         {
@@ -237,6 +249,19 @@ async def get_hospital(hospital_id: int, db: AsyncSession = Depends(get_db)):
             "position": img.position,
             "uploaded_at": img.uploaded_at
         } for img in images
+    ]
+    hospital_dict['faqs'] = [
+        {
+            "id": faq.id,
+            "owner_type": faq.owner_type,
+            "owner_id": faq.owner_id,
+            "question": faq.question,
+            "answer": faq.answer,
+            "position": faq.position,
+            "is_active": faq.is_active,
+            "created_at": faq.created_at,
+            "updated_at": faq.updated_at
+        } for faq in faqs
     ]
     
     return hospital_dict
@@ -373,6 +398,18 @@ async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
     )
     images = images_result.scalars().all()
     
+    # Load FAQs for the doctor
+    faqs_result = await db.execute(
+        select(models.FAQ).where(
+            and_(
+                models.FAQ.owner_id == doctor.id,
+                models.FAQ.owner_type == 'doctor',
+                models.FAQ.is_active == True
+            )
+        ).order_by(models.FAQ.position)
+    )
+    faqs = faqs_result.scalars().all()
+    
     doctor_dict = doctor_to_dict(doctor)
     doctor_dict['images'] = [
         {
@@ -382,6 +419,19 @@ async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
             "position": img.position,
             "uploaded_at": img.uploaded_at
         } for img in images
+    ]
+    doctor_dict['faqs'] = [
+        {
+            "id": faq.id,
+            "owner_type": faq.owner_type,
+            "owner_id": faq.owner_id,
+            "question": faq.question,
+            "answer": faq.answer,
+            "position": faq.position,
+            "is_active": faq.is_active,
+            "created_at": faq.created_at,
+            "updated_at": faq.updated_at
+        } for faq in faqs
     ]
     
     return doctor_dict
@@ -536,6 +586,18 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
     )
     images = images_result.scalars().all()
     
+    # Load FAQs for the treatment
+    faqs_result = await db.execute(
+        select(models.FAQ).where(
+            and_(
+                models.FAQ.owner_id == treatment.id,
+                models.FAQ.owner_type == 'treatment',
+                models.FAQ.is_active == True
+            )
+        ).order_by(models.FAQ.position)
+    )
+    faqs = faqs_result.scalars().all()
+    
     treatment_dict = treatment_to_dict(treatment)
     treatment_dict['images'] = [
         {
@@ -545,6 +607,19 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
             "position": img.position,
             "uploaded_at": img.uploaded_at
         } for img in images
+    ]
+    treatment_dict['faqs'] = [
+        {
+            "id": faq.id,
+            "owner_type": faq.owner_type,
+            "owner_id": faq.owner_id,
+            "question": faq.question,
+            "answer": faq.answer,
+            "position": faq.position,
+            "is_active": faq.is_active,
+            "created_at": faq.created_at,
+            "updated_at": faq.updated_at
+        } for faq in faqs
     ]
     
     return treatment_dict
@@ -687,3 +762,80 @@ async def get_specializations(db: AsyncSession = Depends(get_db)):
                     all_specializations.add(skill)
     
     return sorted(list(all_specializations))
+
+
+# FAQ endpoints
+@router.get("/faqs/{owner_type}/{owner_id}", response_model=List[schemas.FAQResponse])
+async def get_faqs(
+    owner_type: str,
+    owner_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all FAQs for a specific entity (doctor, hospital, or treatment)"""
+    if owner_type not in ["doctor", "hospital", "treatment"]:
+        raise HTTPException(status_code=400, detail="Invalid owner_type. Must be 'doctor', 'hospital', or 'treatment'")
+    
+    result = await db.execute(
+        select(models.FAQ)
+        .where(models.FAQ.owner_type == owner_type)
+        .where(models.FAQ.owner_id == owner_id)
+        .where(models.FAQ.is_active == True)
+        .order_by(models.FAQ.position)
+    )
+    return result.scalars().all()
+
+
+@router.post("/faqs", response_model=schemas.FAQResponse)
+async def create_faq(
+    faq: schemas.FAQCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new FAQ"""
+    if faq.owner_type not in ["doctor", "hospital", "treatment"]:
+        raise HTTPException(status_code=400, detail="Invalid owner_type. Must be 'doctor', 'hospital', or 'treatment'")
+    
+    db_faq = models.FAQ(**faq.model_dump())
+    db.add(db_faq)
+    await db.commit()
+    await db.refresh(db_faq)
+    return db_faq
+
+
+@router.put("/faqs/{faq_id}", response_model=schemas.FAQResponse)
+async def update_faq(
+    faq_id: int,
+    faq_update: schemas.FAQUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing FAQ"""
+    result = await db.execute(select(models.FAQ).where(models.FAQ.id == faq_id))
+    faq = result.scalar_one_or_none()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+    
+    update_data = faq_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(faq, field, value)
+    
+    await db.commit()
+    await db.refresh(faq)
+    return faq
+
+
+@router.delete("/faqs/{faq_id}")
+async def delete_faq(
+    faq_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an FAQ (soft delete by setting is_active=False)"""
+    result = await db.execute(select(models.FAQ).where(models.FAQ.id == faq_id))
+    faq = result.scalar_one_or_none()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+    
+    faq.is_active = False
+    await db.commit()
+    return {"message": "FAQ deleted successfully"}

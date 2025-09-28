@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, update
+from sqlalchemy import select, func, desc, update, delete
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 import hashlib
@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -310,15 +310,27 @@ async def admin_hospitals(
         select(Hospital).order_by(desc(Hospital.created_at)).offset(offset).limit(limit)
     )
     hospitals = result.scalars().all()
-    
+
+    # Load FAQs for each hospital (only first 3 for summary)
+    hospital_faqs_map = {}
+    for hospital in hospitals:
+        faqs_result = await db.execute(
+            select(FAQ).where(
+                FAQ.owner_type == "hospital",
+                FAQ.owner_id == hospital.id
+            ).order_by(FAQ.position, FAQ.id).limit(3)
+        )
+        hospital_faqs_map[hospital.id] = faqs_result.scalars().all()
+
     # Get total count for pagination
     total = await db.scalar(select(func.count(Hospital.id)))
     total_pages = (total + limit - 1) // limit
-    
+
     return render_template("admin/hospitals.html", {
         "request": request,
         "admin": admin,
         "hospitals": hospitals,
+        "hospital_faqs_map": hospital_faqs_map,
         "page": page,
         "total_pages": total_pages,
         "total": total
@@ -369,11 +381,21 @@ async def admin_hospital_edit(
     )
     hospital_images = images_result.scalars().all()
 
+    # Load hospital FAQs separately to avoid lazy loading in template
+    faqs_result = await db.execute(
+        select(FAQ).where(
+            FAQ.owner_type == "hospital",
+            FAQ.owner_id == hospital.id
+        ).order_by(FAQ.id)
+    )
+    hospital_faqs = faqs_result.scalars().all()
+
     return render_template("admin/hospital_form.html", {
         "request": request,
         "admin": admin,
         "hospital": hospital,  
         "hospital_images": hospital_images,
+        "hospital_faqs": hospital_faqs,
         "action": "Update"
     })# Doctor Management
 @router.get("/admin/doctors", response_class=HTMLResponse)
@@ -1297,12 +1319,29 @@ async def admin_doctor_edit(
     # Get hospitals for dropdown
     hospitals = await db.execute(select(Hospital).order_by(Hospital.name))
     hospitals = hospitals.scalars().all()
+
+    # Load doctor FAQs separately to avoid lazy loading in template
+    faqs_result = await db.execute(
+        select(FAQ).where(
+            FAQ.owner_type == "doctor",
+            FAQ.owner_id == doctor.id
+        ).order_by(FAQ.id)
+    )
+    doctor_faqs = faqs_result.scalars().all()
+    
+    # Debug: Check FAQ loading
+    print(f"DEBUG DOCTOR EDIT: Loading FAQs for doctor {doctor.id}")
+    print(f"DEBUG DOCTOR EDIT: Found {len(doctor_faqs)} FAQs")
+    for i, faq in enumerate(doctor_faqs):
+        print(f"DEBUG DOCTOR EDIT: FAQ {i+1}: Q='{faq.question}', A='{faq.answer}'")
+        print(f"DEBUG DOCTOR EDIT: FAQ {i+1} Answer repr: {repr(faq.answer)}")
     
     return render_template("admin/doctor_form.html", {
         "request": request,
         "admin": admin,
         "doctor": doctor,
         "hospitals": hospitals,
+        "doctor_faqs": doctor_faqs,
         "action": "Update"
     })
 
@@ -1373,6 +1412,15 @@ async def admin_treatment_edit(
         ).order_by(Image.position, Image.id)
     )
     treatment_images = images_result.scalars().all()
+
+    # Load treatment FAQs separately to avoid lazy loading in template
+    faqs_result = await db.execute(
+        select(FAQ).where(
+            FAQ.owner_type == "treatment",
+            FAQ.owner_id == treatment.id
+        ).order_by(FAQ.id)
+    )
+    treatment_faqs = faqs_result.scalars().all()
     
     return render_template("admin/treatment_form.html", {
         "request": request,
@@ -1382,6 +1430,7 @@ async def admin_treatment_edit(
         "hospitals": hospitals,
         "doctors": doctors,
         "treatment_types": treatment_types,
+        "treatment_faqs": treatment_faqs,
         "action": "Update"
     })
 
@@ -1507,6 +1556,9 @@ async def admin_hospital_create(
     specializations: str = Form(""),
     features: str = Form(""),
     facilities: str = Form(""),
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form(default=[]),
+    faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -1532,6 +1584,7 @@ async def admin_hospital_create(
             specializations=parse_comma_separated_string(specializations),
             features=parse_comma_separated_string(features),
             facilities=parse_comma_separated_string(facilities),
+            is_featured=is_featured,
             created_at=datetime.now()
         )
         
@@ -1553,6 +1606,17 @@ async def admin_hospital_create(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Handle FAQ creation
+        for question, answer in zip(faq_questions, faq_answers):
+            if question.strip() and answer.strip():  # Only create FAQ if both fields have content
+                faq = FAQ(
+                    owner_type="hospital",
+                    owner_id=hospital.id,
+                    question=question.strip(),
+                    answer=answer.strip()
+                )
+                db.add(faq)
         
         await db.commit()
         return RedirectResponse(url="/admin/hospitals", status_code=302)
@@ -1573,19 +1637,34 @@ async def admin_hospital_update(
     request: Request,
     hospital_id: int,
     name: str = Form(...),
-    description: str = Form(""),
-    location: str = Form(""),
-    phone: str = Form(""),
-    email: str = Form(""),
-    address: str = Form(""),
-    rating: str = Form(""),
-    specializations: str = Form(""),
-    features: str = Form(""),
-    facilities: str = Form(""),
+    description: str = Form("") ,
+    location: str = Form("") ,
+    phone: str = Form("") ,
+    email: str = Form("") ,
+    address: str = Form("") ,
+    rating: str = Form("") ,
+    specializations: str = Form("") ,
+    features: str = Form("") ,
+    facilities: str = Form("") ,
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form([]),
+    faq_answers: List[str] = Form([]),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
+    import logging
+    import traceback
+    logger = logging.getLogger("admin")
+    logger.debug(f"[DEBUG] Received FAQ questions Nawab: {faq_questions}")
+    logger.debug(f"[DEBUG] Received FAQ answers: {faq_answers}")
+    print(f"[DEBUG] Received FAQ questions: {faq_questions}")
+    print(f"[DEBUG] Received FAQ answers: {faq_answers}")
+    # Extra debug: print all POSTed form data
+    try:
+        print(f"[DEBUG] POST form data: name={name}, location={location}, phone={phone}, email={email}, address={address}, rating={rating}, specializations={specializations}, features={features}, facilities={facilities}, is_featured={is_featured}")
+    except Exception as e:
+        print(f"[DEBUG] Error printing POST form data: {e}")
     """Update existing hospital"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
@@ -1595,11 +1674,11 @@ async def admin_hospital_update(
         # Get existing hospital
         result = await db.execute(select(Hospital).where(Hospital.id == hospital_id))
         hospital = result.scalar_one_or_none()
-        
+
         if not hospital:
             raise HTTPException(status_code=404, detail="Hospital not found")
-        
-        # Create and validate the update data using Pydantic schema
+
+        # Update hospital fields
         update_data = HospitalUpdate(
             name=name,
             description=description or None,
@@ -1609,8 +1688,6 @@ async def admin_hospital_update(
             features=parse_comma_separated_string(features),
             facilities=parse_comma_separated_string(facilities)
         )
-        
-        # Update hospital fields
         hospital.name = update_data.name
         hospital.description = update_data.description
         hospital.location = update_data.location
@@ -1621,9 +1698,9 @@ async def admin_hospital_update(
         hospital.specializations = parse_comma_separated_string(specializations)
         hospital.features = update_data.features
         hospital.facilities = update_data.facilities
-        
+        hospital.is_featured = is_featured
+
         # Handle new image uploads
-        # Get current image count for this hospital
         existing_images_result = await db.execute(
             select(func.count(Image.id)).where(
                 Image.owner_type == "hospital",
@@ -1631,11 +1708,11 @@ async def admin_hospital_update(
             )
         )
         image_count = existing_images_result.scalar() or 0
-        
         for image_file in images:
             if image_file and image_file.filename:
                 filename = await save_uploaded_file(image_file, "hospital")
                 if filename:
+
                     image = Image(
                         owner_type="hospital",
                         owner_id=hospital.id,
@@ -1645,19 +1722,72 @@ async def admin_hospital_update(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Remove all existing FAQs for this hospital
+        await db.execute(delete(FAQ).where(FAQ.owner_type == "hospital", FAQ.owner_id == hospital.id))
+
+        # Normalize to list if only one FAQ is present
+        if isinstance(faq_questions, str):
+            faq_questions = [faq_questions]
+        if isinstance(faq_answers, str):
+            faq_answers = [faq_answers]
+
+        # Add new FAQs, skipping duplicates
+        seen_faqs = set()
+        faq_list = []
+        for question, answer in zip(faq_questions, faq_answers):
+            q = question.strip()
+            a = answer.strip()
+            if q and a:
+                key = (q, a)
+                if key not in seen_faqs:
+                    seen_faqs.add(key)
+                    faq_list.append((q, a))
+        for idx, (q, a) in enumerate(faq_list):
+            logger.debug(f"[DEBUG] Saving FAQ: Q='{q}', A='{a}'")
+            faq = FAQ(
+                owner_type="hospital",
+                owner_id=hospital.id,
+                question=q,
+                answer=a,
+                position=idx,
+                is_active=True
+            )
+            db.add(faq)
         
         await db.commit()
         return RedirectResponse(url="/admin/hospitals", status_code=302)
         
     except Exception as e:
         await db.rollback()
-        return render_template("admin/hospital_form.html", {
-            "request": request,
-            "admin": admin,
-            "hospital": hospital,
-            "action": "Update",
-            "error": f"Error updating hospital: {str(e)}"
-        })
+        logger.error(f"[ERROR] Exception in admin_hospital_update: {str(e)}")
+        logger.error(traceback.format_exc())
+        print(f"[ERROR] Exception in admin_hospital_update: {str(e)}")
+        print(traceback.format_exc())
+        # Load latest FAQs for this hospital
+        hospital_faqs = []
+        if hospital and hospital.id:
+            try:
+                faqs_result = await db.execute(
+                    select(FAQ).where(
+                        FAQ.owner_type == "hospital",
+                        FAQ.owner_id == hospital.id
+                    ).order_by(FAQ.position, FAQ.id)
+                )
+                hospital_faqs = faqs_result.scalars().all()
+            except Exception as e2:
+                print(f"[ERROR] Exception loading hospital FAQs after error: {e2}")
+        return render_template(
+            "admin/hospital_form.html",
+            {
+                "request": request,
+                "admin": admin,
+                "hospital": hospital,
+                "hospital_faqs": hospital_faqs,
+                "action": "Update",
+                "error": f"Error updating hospital: {str(e)}"
+            }
+        )
 
 @router.post("/admin/doctors")
 async def admin_doctor_create(
@@ -1674,6 +1804,9 @@ async def admin_doctor_create(
     qualifications: str = Form(""),
     highlights: str = Form(""),
     awards: str = Form(""),
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form(default=[]),
+    faq_answers: List[str] = Form(default=[]),
     profile_photo: UploadFile = File(default=None),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
@@ -1708,6 +1841,7 @@ async def admin_doctor_create(
             highlights=parse_comma_separated_string(highlights),
             awards=parse_comma_separated_string(awards),
             profile_photo=f"/media/doctor/{profile_photo_filename}" if profile_photo_filename else None,
+            is_featured=is_featured,
             created_at=datetime.now()
         )
         
@@ -1729,6 +1863,17 @@ async def admin_doctor_create(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Handle FAQ creation
+        for question, answer in zip(faq_questions, faq_answers):
+            if question.strip() and answer.strip():  # Only create FAQ if both fields have content
+                faq = FAQ(
+                    owner_type="doctor",
+                    owner_id=doctor.id,
+                    question=question.strip(),
+                    answer=answer.strip()
+                )
+                db.add(faq)
         
         await db.commit()
         return RedirectResponse(url="/admin/doctors", status_code=302)
@@ -1764,6 +1909,9 @@ async def admin_doctor_update(
     qualifications: str = Form(""),
     highlights: str = Form(""),
     awards: str = Form(""),
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form(default=[]),
+    faq_answers: List[str] = Form(default=[]),
     profile_photo: UploadFile = File(default=None),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
@@ -1773,6 +1921,12 @@ async def admin_doctor_update(
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
+    
+    # Debug: Print FAQ data received
+    print(f"DEBUG DOCTOR: FAQ Questions received: {faq_questions}")
+    print(f"DEBUG DOCTOR: FAQ Answers received: {faq_answers}")
+    print(f"DEBUG DOCTOR: Questions count: {len(faq_questions)}, Answers count: {len(faq_answers)}")
+    print(f"DEBUG DOCTOR: is_featured: {is_featured}")
     
     try:
         # Get existing doctor
@@ -1814,6 +1968,7 @@ async def admin_doctor_update(
         doctor.qualifications = update_data.qualifications
         doctor.highlights = update_data.highlights
         doctor.awards = update_data.awards
+        doctor.is_featured = is_featured
         
         # Handle new image uploads
         # Get current image count for this doctor
@@ -1838,8 +1993,43 @@ async def admin_doctor_update(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Handle FAQ updates - remove existing FAQs and create new ones
+        print(f"DEBUG DOCTOR: Deleting existing FAQs for doctor {doctor.id}")
+        await db.execute(delete(FAQ).where(FAQ.owner_type == "doctor", FAQ.owner_id == doctor.id))
+
+        # Create new FAQs (skip the first empty hidden field)
+        faqs_created = 0
+        for i, (question, answer) in enumerate(zip(faq_questions, faq_answers)):
+            print(f"DEBUG DOCTOR: Processing FAQ {i+1}: Q='{question}', A='{answer}'")
+            # Skip empty entries (including the hidden field)
+            if question.strip() and answer.strip():  
+                faq = FAQ(
+                    owner_type="doctor",
+                    owner_id=doctor.id,
+                    question=question.strip(),
+                    answer=answer.strip()
+                )
+                db.add(faq)
+                faqs_created += 1
+                print(f"DEBUG DOCTOR: Created FAQ {faqs_created}: Q='{question.strip()}', A='{answer.strip()}'")
+                print(f"DEBUG DOCTOR: Answer repr: {repr(answer.strip())}")
+            else:
+                print(f"DEBUG DOCTOR: Skipped empty FAQ {i+1}")
         
+        print(f"DEBUG DOCTOR: Total FAQs created: {faqs_created}")
+        
+        # Flush to ensure data is written before commit
+        await db.flush()
         await db.commit()
+        print(f"DEBUG DOCTOR: Data committed successfully")
+        
+        # Verify FAQs were saved
+        verify_faqs = (await db.execute(select(FAQ).where(FAQ.owner_type == "doctor", FAQ.owner_id == doctor.id))).scalars().all()
+        print(f"DEBUG DOCTOR: Verification - Found {len(verify_faqs)} FAQs in database after commit")
+        for i, faq in enumerate(verify_faqs):
+            print(f"DEBUG DOCTOR: Verification FAQ {i+1}: Q='{faq.question}', A='{faq.answer}'")
+        
         return RedirectResponse(url="/admin/doctors", status_code=302)
         
     except Exception as e:
@@ -1872,6 +2062,9 @@ async def admin_treatment_create(
     other_hospital_name: str = Form(""),
     doctor_id: Optional[int] = Form(None),
     other_doctor_name: str = Form(""),
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form(default=[]),
+    faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -1897,6 +2090,7 @@ async def admin_treatment_create(
             other_hospital_name=other_hospital_name or None,
             doctor_id=doctor_id,
             other_doctor_name=other_doctor_name or None,
+            is_featured=is_featured,
             created_at=datetime.now()
         )
         
@@ -1918,6 +2112,17 @@ async def admin_treatment_create(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Handle FAQ creation
+        for question, answer in zip(faq_questions, faq_answers):
+            if question.strip() and answer.strip():  # Only create FAQ if both fields have content
+                faq = FAQ(
+                    owner_type="treatment",
+                    owner_id=treatment.id,
+                    question=question.strip(),
+                    answer=answer.strip()
+                )
+                db.add(faq)
         
         await db.commit()
         return RedirectResponse(url="/admin/treatments", status_code=302)
@@ -1957,6 +2162,9 @@ async def admin_treatment_update(
     other_hospital_name: str = Form(""),
     doctor_id: str = Form(""),
     other_doctor_name: str = Form(""),
+    is_featured: bool = Form(False),
+    faq_questions: List[str] = Form(default=[]),
+    faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -2005,6 +2213,7 @@ async def admin_treatment_update(
         treatment.other_hospital_name = update_data.other_hospital_name
         treatment.doctor_id = update_data.doctor_id
         treatment.other_doctor_name = update_data.other_doctor_name
+        treatment.is_featured = is_featured
         
         # Handle new image uploads
         # Get current image count for this treatment
@@ -2029,6 +2238,20 @@ async def admin_treatment_update(
                     )
                     db.add(image)
                     image_count += 1
+
+        # Handle FAQ updates - remove existing FAQs and create new ones
+        await db.execute(delete(FAQ).where(FAQ.owner_type == "treatment", FAQ.owner_id == treatment.id))
+
+        # Create new FAQs
+        for question, answer in zip(faq_questions, faq_answers):
+            if question.strip() and answer.strip():  # Only create FAQ if both fields have content
+                faq = FAQ(
+                    owner_type="treatment",
+                    owner_id=treatment.id,
+                    question=question.strip(),
+                    answer=answer.strip()
+                )
+                db.add(faq)
         
         await db.commit()
         return RedirectResponse(url="/admin/treatments", status_code=302)

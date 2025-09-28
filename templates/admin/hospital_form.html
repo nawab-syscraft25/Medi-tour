@@ -18,6 +18,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="/admin/hospitals{% if hospital %}/{{ hospital.id }}{% endif %}" enctype="multipart/form-data">
+                    
                     <!-- Basic Information -->
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -146,6 +147,21 @@
                     </div>
                     {% endif %}
 
+                    <!-- Featured Checkbox -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="true" 
+                                   {% if hospital and hospital.is_featured %}checked{% endif %}>
+                            <label class="form-check-label" for="is_featured">
+                                <i class="fas fa-star text-warning"></i> Featured Hospital
+                            </label>
+                            <div class="form-text">Featured hospitals will be highlighted and shown prominently.</div>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Section -->
+                    <!-- FAQ Section removed -->
+
                     <!-- Action Buttons -->
                     <div class="d-flex justify-content-between">
                         <a href="/admin/hospitals" class="btn btn-outline-secondary">
@@ -203,7 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     form.addEventListener('submit', function(e) {
         let isValid = true;
-        
         // Validate required fields
         const requiredFields = ['name', 'location'];
         requiredFields.forEach(fieldName => {
@@ -215,13 +230,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 field.classList.remove('is-invalid');
             }
         });
-
         if (!isValid) {
             e.preventDefault();
             alert('Please correct the errors in the form before submitting.');
         }
     });
-
     // Add visual feedback for comma-separated fields
     const arrayFields = ['specializations', 'features', 'facilities'];
     arrayFields.forEach(fieldName => {

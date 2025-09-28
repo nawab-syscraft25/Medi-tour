@@ -5,6 +5,12 @@ from sqlalchemy.orm import relationship, declarative_base, foreign
 
 Base = declarative_base()
 
+# Association table for many-to-many relationship between Doctor and Hospital
+doctor_hospital_association = Table('doctor_hospital_association', Base.metadata,
+    Column('doctor_id', Integer, ForeignKey('doctors.id'), primary_key=True),
+    Column('hospital_id', Integer, ForeignKey('hospitals.id'), primary_key=True)
+)
+
 class Image(Base):
     __tablename__ = "images"
     id = Column(Integer, primary_key=True, index=True)
@@ -14,6 +20,19 @@ class Image(Base):
     is_primary = Column(Boolean, default=False)
     position = Column(Integer, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FAQ(Base):
+    __tablename__ = "faqs"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_type = Column(String(50), nullable=False)  # "hospital","doctor","treatment"
+    owner_id = Column(Integer, nullable=False)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    position = Column(Integer, default=0)  # For ordering FAQs
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Slider(Base):
     __tablename__ = "sliders"
@@ -42,13 +61,17 @@ class Hospital(Base):
     rating = Column(Float, nullable=True)
     features = Column(Text, nullable=True)    # comma-separated one-liners
     facilities = Column(Text, nullable=True)  # comma-separated keywords
+    is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    doctors = relationship("Doctor", back_populates="hospital", lazy="noload")
+    doctors = relationship("Doctor", secondary=doctor_hospital_association, back_populates="hospitals", lazy="noload")
     tours = relationship("Treatment", back_populates="hospital", lazy="noload")
     images = relationship("Image", 
                          primaryjoin="and_(Hospital.id == foreign(Image.owner_id), Image.owner_type == 'hospital')",
                          lazy="select", viewonly=True)
+    faqs = relationship("FAQ", 
+                       primaryjoin="and_(Hospital.id == foreign(FAQ.owner_id), FAQ.owner_type == 'hospital')",
+                       lazy="select", viewonly=True)
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -61,19 +84,24 @@ class Doctor(Base):
     qualification = Column(String(500), nullable=True)   # main qualification
     experience_years = Column(Integer, nullable=True)
     rating = Column(Float, nullable=True)
-    hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)
+    hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)  # primary hospital
     gender = Column(String(20), nullable=True)
     skills = Column(Text, nullable=True)           # comma-separated
     qualifications = Column(Text, nullable=True)   # detailed qualifications
     highlights = Column(Text, nullable=True)
     awards = Column(Text, nullable=True)
+    is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    hospital = relationship("Hospital", back_populates="doctors", lazy="noload")
+    hospital = relationship("Hospital", foreign_keys=[hospital_id], lazy="noload")  # primary hospital
+    hospitals = relationship("Hospital", secondary=doctor_hospital_association, back_populates="doctors", lazy="noload")  # all associated hospitals
     appointments = relationship("Appointment", back_populates="doctor", lazy="noload")
     images = relationship("Image",
                          primaryjoin="and_(Doctor.id == foreign(Image.owner_id), Image.owner_type == 'doctor')",
                          lazy="select", viewonly=True)
+    faqs = relationship("FAQ", 
+                       primaryjoin="and_(Doctor.id == foreign(FAQ.owner_id), FAQ.owner_type == 'doctor')",
+                       lazy="select", viewonly=True)
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -103,12 +131,16 @@ class Treatment(Base):
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="SET NULL"), nullable=True)
     other_doctor_name = Column(String(300), nullable=True)
     location = Column(String(500), nullable=True)
+    is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="tours", lazy="noload")
     doctor = relationship("Doctor", lazy="noload")
     images = relationship("Image", 
                          primaryjoin="and_(Treatment.id == foreign(Image.owner_id), Image.owner_type == 'treatment')",
                          lazy="select", viewonly=True)
+    faqs = relationship("FAQ", 
+                       primaryjoin="and_(Treatment.id == foreign(FAQ.owner_id), FAQ.owner_type == 'treatment')",
+                       lazy="select", viewonly=True)
 
 class PackageBooking(Base):
     __tablename__ = "package_bookings"

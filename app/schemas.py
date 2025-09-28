@@ -36,6 +36,38 @@ class ImageResponse(BaseSchema):
     uploaded_at: datetime
 
 
+# FAQ schemas
+class FAQBase(BaseModel):
+    question: str
+    answer: str
+    position: int = 0
+    is_active: bool = True
+
+
+class FAQCreate(FAQBase):
+    owner_type: str  # "doctor", "hospital", "treatment"
+    owner_id: int
+
+
+class FAQUpdate(BaseModel):
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    position: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class FAQResponse(BaseSchema):
+    id: int
+    owner_type: str
+    owner_id: int
+    question: str
+    answer: str
+    position: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 # Slider schemas
 class SliderBase(BaseModel):
     title: Optional[str] = None
@@ -77,6 +109,7 @@ class HospitalBase(BaseModel):
     rating: Optional[float] = None
     features: Optional[str] = None  # comma-separated
     facilities: Optional[str] = None  # comma-separated
+    is_featured: bool = False
     
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
@@ -105,6 +138,7 @@ class HospitalUpdate(BaseModel):
     rating: Optional[float] = None
     features: Optional[str] = None
     facilities: Optional[str] = None
+    is_featured: Optional[bool] = None
     
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
@@ -125,6 +159,7 @@ class HospitalResponse(HospitalBase, BaseSchema):
     id: int
     created_at: datetime
     images: List[ImageResponse] = []
+    faqs: List[FAQResponse] = []
     
     @property
     def features_list(self) -> List[str]:
@@ -149,6 +184,7 @@ class DoctorBase(BaseModel):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    is_featured: bool = False
     
     @validator('experience_years', pre=True, always=True)
     def validate_experience_years(cls, v):
@@ -196,6 +232,7 @@ class DoctorUpdate(BaseModel):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    is_featured: Optional[bool] = None
     
     @validator('experience_years', pre=True, always=True)
     def validate_experience_years(cls, v):
@@ -242,6 +279,7 @@ class DoctorResponse(BaseSchema):
     awards: Optional[str] = None
     created_at: datetime
     images: List[ImageResponse] = []
+    faqs: List[FAQResponse] = []
     
     @property
     def skills_list(self) -> List[str]:
@@ -263,6 +301,7 @@ class TreatmentBase(BaseModel):
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    is_featured: bool = False
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
     def validate_prices(cls, v):
@@ -311,6 +350,7 @@ class TreatmentUpdate(BaseModel):
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    is_featured: Optional[bool] = None
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
     def validate_prices(cls, v):
@@ -358,6 +398,7 @@ class TreatmentResponse(BaseSchema):
     location: Optional[str] = None
     created_at: datetime
     images: List[ImageResponse] = []
+    faqs: List[FAQResponse] = []
 
 
 # Package Booking schemas
