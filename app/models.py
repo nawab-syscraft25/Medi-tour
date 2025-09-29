@@ -178,15 +178,27 @@ class Admin(Base):
 class ContactUs(Base):
     __tablename__ = "contact_us"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(250), nullable=False)
+    first_name = Column(String(150), nullable=False)
+    last_name = Column(String(150), nullable=False)
     email = Column(String(300), nullable=False, index=True)
     phone = Column(String(80), nullable=True)
     subject = Column(String(500), nullable=True)
     message = Column(Text, nullable=False)
+    service_type = Column(String(100), nullable=True, index=True)  # Service type field
     is_read = Column(Boolean, default=False)
     admin_response = Column(Text, nullable=True)
     responded_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    @property
+    def full_name(self) -> str:
+        """Get full name for display purposes (backward compatibility)"""
+        return f"{self.first_name} {self.last_name}".strip()
+    
+    @property
+    def name(self) -> str:
+        """Backward compatibility property for templates"""
+        return self.full_name
 
 
 class Offer(Base):

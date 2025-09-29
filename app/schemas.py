@@ -524,11 +524,13 @@ class AdminToken(BaseModel):
 
 # Contact Us schemas
 class ContactUsBase(BaseModel):
-    name: str
+    first_name: str
+    last_name: str
     email: EmailStr
     phone: Optional[str] = None
     subject: Optional[str] = None
     message: str
+    service_type: Optional[str] = None
 
 
 class ContactUsCreate(ContactUsBase):
@@ -550,7 +552,6 @@ class ContactUsResponse(ContactUsBase, BaseSchema):
 
 # Offer schemas (Attractions / Discount Packages)
 class OfferBase(BaseModel):
-    name: str
     description: str
     treatment_type: Optional[str] = None
     location: Optional[str] = None
