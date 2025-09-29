@@ -57,11 +57,35 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "price_exact": treatment.price_exact,
         "hospital_id": treatment.hospital_id,
         "other_hospital_name": treatment.other_hospital_name,
-        "doctor_id": treatment.doctor_id,
         "other_doctor_name": treatment.other_doctor_name,
         "location": treatment.location,
         "rating": treatment.rating,
         "created_at": treatment.created_at,
+        "images": []  # Will be populated separately
+    }
+
+
+def blog_to_dict(blog: models.Blog) -> dict:
+    """Convert Blog model to dict for safe serialization"""
+    return {
+        "id": blog.id,
+        "title": blog.title,
+        "subtitle": blog.subtitle,
+        "slug": blog.slug,
+        "content": blog.content,
+        "excerpt": blog.excerpt,
+        "featured_image": blog.featured_image,
+        "meta_description": blog.meta_description,
+        "tags": blog.tags,
+        "category": blog.category,
+        "author_name": blog.author_name,
+        "reading_time": blog.reading_time,
+        "view_count": blog.view_count,
+        "is_published": blog.is_published,
+        "is_featured": blog.is_featured,
+        "published_at": blog.published_at,
+        "created_at": blog.created_at,
+        "updated_at": blog.updated_at,
         "images": []  # Will be populated separately
     }
 
@@ -839,3 +863,278 @@ async def delete_faq(
     faq.is_active = False
     await db.commit()
     return {"message": "FAQ deleted successfully"}
+
+
+# Blog endpoints
+@router.get("/blogs", response_model=List[schemas.BlogResponse])
+async def get_blogs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    search: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    tags: Optional[str] = Query(None),
+    published_only: bool = Query(True),
+    featured_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all blogs with filtering and pagination"""
+    query = select(models.Blog)
+    
+    filters = []
+    if search:
+        filters.append(or_(
+            models.Blog.title.ilike(f"%{search}%"),
+            models.Blog.content.ilike(f"%{search}%"),
+            models.Blog.excerpt.ilike(f"%{search}%")
+        ))
+    if category:
+        filters.append(models.Blog.category.ilike(f"%{category}%"))
+    if tags:
+        filters.append(models.Blog.tags.ilike(f"%{tags}%"))
+    if published_only:
+        filters.append(models.Blog.is_published == True)
+    if featured_only:
+        filters.append(models.Blog.is_featured == True)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.Blog.created_at.desc())
+    
+    result = await db.execute(query)
+    blogs = result.scalars().all()
+    
+    # Load images for each blog within the session
+    blog_dicts = []
+    for blog in blogs:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == blog.id,
+                    models.Image.owner_type == 'blog'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        blog_dict = blog_to_dict(blog)
+        blog_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        blog_dicts.append(blog_dict)
+    
+    return blog_dicts
+
+
+@router.get("/blogs/{blog_id}", response_model=schemas.BlogResponse)
+async def get_blog(blog_id: int, db: AsyncSession = Depends(get_db)):
+    """Get blog details by ID"""
+    result = await db.execute(select(models.Blog).where(models.Blog.id == blog_id))
+    blog = result.scalar_one_or_none()
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    
+    # Load images for the blog within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == blog.id,
+                models.Image.owner_type == 'blog'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    blog_dict = blog_to_dict(blog)
+    blog_dict['images'] = [
+        {
+            "id": img.id,
+            "url": img.url,
+            "is_primary": img.is_primary,
+            "position": img.position,
+            "uploaded_at": img.uploaded_at
+        } for img in images
+    ]
+    
+    # Increment view count
+    blog.view_count += 1
+    await db.commit()
+    blog_dict['view_count'] = blog.view_count
+    
+    return blog_dict
+
+
+@router.get("/blogs/slug/{slug}", response_model=schemas.BlogResponse)
+async def get_blog_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
+    """Get blog details by slug"""
+    result = await db.execute(select(models.Blog).where(models.Blog.slug == slug))
+    blog = result.scalar_one_or_none()
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    
+    # Load images for the blog within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == blog.id,
+                models.Image.owner_type == 'blog'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    blog_dict = blog_to_dict(blog)
+    blog_dict['images'] = [
+        {
+            "id": img.id,
+            "url": img.url,
+            "is_primary": img.is_primary,
+            "position": img.position,
+            "uploaded_at": img.uploaded_at
+        } for img in images
+    ]
+    
+    # Increment view count
+    blog.view_count += 1
+    await db.commit()
+    blog_dict['view_count'] = blog.view_count
+    
+    return blog_dict
+
+
+@router.post("/blogs", response_model=schemas.BlogResponse)
+async def create_blog(
+    blog: schemas.BlogCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new blog (admin only)"""
+    # Generate unique slug from title
+    import re
+    slug = re.sub(r'[^a-zA-Z0-9\s-]', '', blog.title.lower())
+    slug = re.sub(r'\s+', '-', slug.strip())
+    
+    # Ensure slug is unique
+    base_slug = slug
+    counter = 1
+    while True:
+        result = await db.execute(select(models.Blog).where(models.Blog.slug == slug))
+        existing = result.scalar_one_or_none()
+        if not existing:
+            break
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    
+    db_blog = models.Blog(**blog.model_dump(), slug=slug)
+    db.add(db_blog)
+    await db.commit()
+    
+    # Fetch fresh copy to get the generated ID without triggering relationships
+    result = await db.execute(select(models.Blog).where(models.Blog.id == db_blog.id))
+    fresh_blog = result.scalar_one()
+    return blog_to_dict(fresh_blog)
+
+
+@router.put("/blogs/{blog_id}", response_model=schemas.BlogResponse)
+async def update_blog(
+    blog_id: int,
+    blog_update: schemas.BlogUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing blog (admin only)"""
+    result = await db.execute(select(models.Blog).where(models.Blog.id == blog_id))
+    blog = result.scalar_one_or_none()
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    
+    update_data = blog_update.model_dump(exclude_unset=True)
+    
+    # If title is being updated, regenerate slug
+    if 'title' in update_data:
+        import re
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', update_data['title'].lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        # Ensure slug is unique (excluding current blog)
+        base_slug = slug
+        counter = 1
+        while True:
+            result = await db.execute(
+                select(models.Blog).where(
+                    and_(models.Blog.slug == slug, models.Blog.id != blog_id)
+                )
+            )
+            existing = result.scalar_one_or_none()
+            if not existing:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        update_data['slug'] = slug
+    
+    for field, value in update_data.items():
+        setattr(blog, field, value)
+    
+    await db.commit()
+    await db.refresh(blog)
+    return blog_to_dict(blog)
+
+
+@router.delete("/blogs/{blog_id}")
+async def delete_blog(
+    blog_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a blog (admin only)"""
+    result = await db.execute(select(models.Blog).where(models.Blog.id == blog_id))
+    blog = result.scalar_one_or_none()
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    
+    await db.delete(blog)
+    await db.commit()
+    return {"message": "Blog deleted successfully"}
+
+
+# Blog filter endpoints
+@router.get("/filters/blog-categories", response_model=List[str])
+async def get_blog_categories(db: AsyncSession = Depends(get_db)):
+    """Get all unique blog categories for dropdown"""
+    result = await db.execute(
+        select(models.Blog.category).distinct().where(models.Blog.category.isnot(None))
+    )
+    categories = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_categories = [c.strip() for c in categories if c and c.strip()]
+    return sorted(valid_categories)
+
+
+@router.get("/filters/blog-tags", response_model=List[str])
+async def get_blog_tags(db: AsyncSession = Depends(get_db)):
+    """Get all unique blog tags for dropdown"""
+    result = await db.execute(
+        select(models.Blog.tags).distinct().where(models.Blog.tags.isnot(None))
+    )
+    tags_list = result.scalars().all()
+    
+    # Parse comma-separated tags and create unique list
+    all_tags = set()
+    for tags in tags_list:
+        if tags and tags.strip():
+            # Split by comma and clean each tag
+            for tag in tags.split(','):
+                tag = tag.strip()
+                if tag:
+                    all_tags.add(tag)
+    
+    return sorted(list(all_tags))
