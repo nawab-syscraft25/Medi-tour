@@ -29,16 +29,20 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "id": doctor.id,
         "name": doctor.name,
         "profile_photo": doctor.profile_photo,
-        "description": doctor.description,
+        "short_description": doctor.short_description,
+        "long_description": doctor.long_description,
         "designation": doctor.designation,
+        "specialization": doctor.specialization,
+        "qualification": doctor.qualification,
         "experience_years": doctor.experience_years,
+        "rating": doctor.rating,
+        "consultancy_fee": doctor.consultancy_fee,
         "hospital_id": doctor.hospital_id,
         "gender": doctor.gender,
         "skills": doctor.skills,
         "qualifications": doctor.qualifications,
         "highlights": doctor.highlights,
         "awards": doctor.awards,
-        "rating": doctor.rating,
         "created_at": doctor.created_at,
         "images": []  # Will be populated separately
     }
@@ -351,6 +355,7 @@ async def get_doctors(
     search: Optional[str] = Query(None),
     hospital_id: Optional[int] = Query(None),
     specialization: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(models.Doctor)
@@ -360,12 +365,19 @@ async def get_doctors(
         filters.append(or_(
             models.Doctor.name.ilike(f"%{search}%"),
             models.Doctor.designation.ilike(f"%{search}%"),
-            models.Doctor.description.ilike(f"%{search}%")
+            models.Doctor.short_description.ilike(f"%{search}%"),
+            models.Doctor.long_description.ilike(f"%{search}%"),
+            models.Doctor.specialization.ilike(f"%{search}%"),
+            models.Doctor.qualification.ilike(f"%{search}%"),
+            models.Doctor.location.ilike(f"%{search}%")
         ))
     if hospital_id:
         filters.append(models.Doctor.hospital_id == hospital_id)
     if specialization:
         filters.append(models.Doctor.skills.ilike(f"%{specialization}%"))
+    if location:
+        filters.append(models.Doctor.location.ilike(f"%{location}%"))
+    
     
     if filters:
         query = query.where(and_(*filters))
@@ -729,7 +741,7 @@ async def get_booking(booking_id: int, db: AsyncSession = Depends(get_db)):
 # Dropdown/Filter Data Endpoints
 @router.get("/filters/locations", response_model=List[str])
 async def get_locations(db: AsyncSession = Depends(get_db)):
-    """Get all unique locations from hospitals and treatments for dropdown"""
+    """Get all unique locations from hospitals, treatments, and doctors for dropdown"""
     # Get locations from hospitals
     hospital_result = await db.execute(
         select(models.Hospital.location).distinct().where(models.Hospital.location.isnot(None))
@@ -742,9 +754,56 @@ async def get_locations(db: AsyncSession = Depends(get_db)):
     )
     treatment_locations = treatment_result.scalars().all()
     
+    # Get locations from doctors
+    doctor_result = await db.execute(
+        select(models.Doctor.location).distinct().where(models.Doctor.location.isnot(None))
+    )
+    doctor_locations = doctor_result.scalars().all()
+    
     # Combine and clean locations
     all_locations = set()
-    for location in hospital_locations + treatment_locations:
+    for location in hospital_locations + treatment_locations + doctor_locations:
+        if location and location.strip():
+            # Extract city name (everything before the first comma)
+            city = location.split(',')[0].strip()
+            if city:
+                all_locations.add(city)
+    
+    return sorted(list(all_locations))
+
+
+@router.get("/doctor-filters/locations", response_model=List[str])
+async def get_doctor_locations(db: AsyncSession = Depends(get_db)):
+    """Get all unique locations from doctors for dropdown"""
+    # Get locations from doctors
+    doctor_result = await db.execute(
+        select(models.Doctor.location).distinct().where(models.Doctor.location.isnot(None))
+    )
+    doctor_locations = doctor_result.scalars().all()
+    
+    # Combine and clean locations
+    all_locations = set()
+    for location in doctor_locations:
+        if location and location.strip():
+            # Extract city name (everything before the first comma)
+            city = location.split(',')[0].strip()
+            if city:
+                all_locations.add(city)
+    
+    return sorted(list(all_locations))
+
+@router.get("/doctor-filters/locations", response_model=List[str])
+async def get_doctor_locations(db: AsyncSession = Depends(get_db)):
+    """Get all unique locations from doctors for dropdown"""
+    # Get locations from doctors
+    doctor_result = await db.execute(
+        select(models.Doctor.location).distinct().where(models.Doctor.location.isnot(None))
+    )
+    doctor_locations = doctor_result.scalars().all()
+    
+    # Combine and clean locations
+    all_locations = set()
+    for location in doctor_locations:
         if location and location.strip():
             # Extract city name (everything before the first comma)
             city = location.split(',')[0].strip()
@@ -771,7 +830,7 @@ async def get_treatment_types(db: AsyncSession = Depends(get_db)):
 async def get_specializations(db: AsyncSession = Depends(get_db)):
     """Get all unique specializations/skills from doctors for dropdown"""
     result = await db.execute(
-        select(models.Doctor.skills).distinct().where(models.Doctor.skills.isnot(None))
+        select(models.Doctor.specialization).distinct().where(models.Doctor.specialization.isnot(None))
     )
     skills_list = result.scalars().all()
     

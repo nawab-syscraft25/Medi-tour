@@ -96,7 +96,7 @@
                         <td>
                             {% if doctor.rating %}
                                 <div class="d-flex align-items-center">
-                                    <span class="me-1">{{ "%.1f"|format(doctor.rating) }}</span>
+                                    <!-- <span class="me-1">{{ "%.1f"|format(doctor.rating) }}</span> -->
                                     <div class="text-warning">
                                         {% for i in range(5) %}
                                             {% if i < doctor.rating %}

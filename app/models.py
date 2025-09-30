@@ -78,13 +78,16 @@ class Doctor(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(250), nullable=False, index=True)
     profile_photo = Column(String(1000), nullable=True)
-    description = Column(Text, nullable=True)
+    short_description = Column(String(500), nullable=True)  # Brief description for cards/listings
+    long_description = Column(Text, nullable=True)  # Detailed description for profile page
     designation = Column(String(200), nullable=True)
     specialization = Column(String(200), nullable=True)  # single main specialization
     qualification = Column(String(500), nullable=True)   # main qualification
     experience_years = Column(Integer, nullable=True)
     rating = Column(Float, nullable=True)
+    consultancy_fee = Column(Float, nullable=True)  # Consultation fee
     hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)  # primary hospital
+    location = Column(String(500), nullable=True)  # Doctor's practice location
     gender = Column(String(20), nullable=True)
     skills = Column(Text, nullable=True)           # comma-separated
     qualifications = Column(Text, nullable=True)   # detailed qualifications
@@ -102,6 +105,11 @@ class Doctor(Base):
     faqs = relationship("FAQ", 
                        primaryjoin="and_(Doctor.id == foreign(FAQ.owner_id), FAQ.owner_type == 'doctor')",
                        lazy="select", viewonly=True)
+    
+    @property
+    def description(self) -> str:
+        """Backward compatibility property for templates"""
+        return self.short_description or self.long_description or ""
 
 class Appointment(Base):
     __tablename__ = "appointments"

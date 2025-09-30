@@ -164,8 +164,6 @@ class HospitalResponse(HospitalBase, BaseSchema):
     @property
     def features_list(self) -> List[str]:
         return [f.strip() for f in (self.features or "").split(",") if f.strip()]
-    
-    @property
     def facilities_list(self) -> List[str]:
         return [f.strip() for f in (self.facilities or "").split(",") if f.strip()]
 
@@ -174,11 +172,16 @@ class HospitalResponse(HospitalBase, BaseSchema):
 class DoctorBase(BaseModel):
     name: str
     profile_photo: Optional[str] = None
-    description: Optional[str] = None
+    short_description: Optional[str] = None
+    long_description: Optional[str] = None
     designation: Optional[str] = None
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
     experience_years: Optional[int] = None
     rating: Optional[float] = None
+    consultancy_fee: Optional[float] = None
     hospital_id: Optional[int] = None
+    location: Optional[str] = None
     gender: Optional[str] = None
     skills: Optional[str] = None  # comma-separated
     qualifications: Optional[str] = None
@@ -213,6 +216,20 @@ class DoctorBase(BaseModel):
                     return None
                 raise ValueError('Rating must be a valid number')
         return None
+    
+    @validator('consultancy_fee', pre=True, always=True)
+    def validate_consultancy_fee(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 0:
+                    raise ValueError('Consultancy fee must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Consultancy fee must be a valid number')
+        return None
 
 
 class DoctorCreate(DoctorBase):
@@ -222,11 +239,16 @@ class DoctorCreate(DoctorBase):
 class DoctorUpdate(BaseModel):
     name: Optional[str] = None
     profile_photo: Optional[str] = None
-    description: Optional[str] = None
+    short_description: Optional[str] = None
+    long_description: Optional[str] = None
     designation: Optional[str] = None
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
     experience_years: Optional[int] = None
     rating: Optional[float] = None
+    consultancy_fee: Optional[float] = None
     hospital_id: Optional[int] = None
+    location: Optional[str] = None
     gender: Optional[str] = None
     skills: Optional[str] = None
     qualifications: Optional[str] = None
@@ -261,17 +283,36 @@ class DoctorUpdate(BaseModel):
                     return None
                 raise ValueError('Rating must be a valid number')
         return None
+    
+    @validator('consultancy_fee', pre=True, always=True)
+    def validate_consultancy_fee(cls, v):
+        if v is not None and v != "":
+            try:
+                v = float(v)
+                if v < 0:
+                    raise ValueError('Consultancy fee must be a positive number')
+                return v
+            except (ValueError, TypeError):
+                if v == "":  # Empty string should be converted to None
+                    return None
+                raise ValueError('Consultancy fee must be a valid number')
+        return None
 
 
 class DoctorResponse(BaseSchema):
     id: int
     name: str
     profile_photo: Optional[str] = None
-    description: Optional[str] = None
+    short_description: Optional[str] = None
+    long_description: Optional[str] = None
     designation: Optional[str] = None
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
     experience_years: Optional[int] = None
     rating: Optional[float] = None
+    consultancy_fee: Optional[float] = None
     hospital_id: Optional[int] = None
+    location: Optional[str] = None
     gender: Optional[str] = None
     skills: Optional[str] = None
     qualifications: Optional[str] = None

@@ -1329,6 +1329,15 @@ async def admin_doctor_edit(
     )
     doctor_faqs = faqs_result.scalars().all()
     
+    # Load doctor images separately to avoid lazy loading in template
+    images_result = await db.execute(
+        select(Image).where(
+            Image.owner_type == "doctor",
+            Image.owner_id == doctor.id
+        ).order_by(Image.position, Image.id)
+    )
+    doctor_images = images_result.scalars().all()
+    
     # Debug: Check FAQ loading
     print(f"DEBUG DOCTOR EDIT: Loading FAQs for doctor {doctor.id}")
     print(f"DEBUG DOCTOR EDIT: Found {len(doctor_faqs)} FAQs")
@@ -1342,6 +1351,7 @@ async def admin_doctor_edit(
         "doctor": doctor,
         "hospitals": hospitals,
         "doctor_faqs": doctor_faqs,
+        "doctor_images": doctor_images,
         "action": "Update"
     })
 
@@ -1795,11 +1805,15 @@ async def admin_doctor_create(
     name: str = Form(...),
     designation: str = Form(""),
     hospital_id: Optional[int] = Form(None),
+    location: str = Form(""),
     experience_years: Optional[int] = Form(None),
     rating: Optional[float] = Form(None),
     gender: str = Form(""),
-    description: str = Form(""),
+    short_description: str = Form(""),
+    long_description: str = Form(""),
     specialization: str = Form(""),
+    qualification: str = Form(""),
+    consultancy_fee: Optional[float] = Form(None),
     skills: str = Form(""),
     qualifications: str = Form(""),
     highlights: str = Form(""),
@@ -1831,11 +1845,15 @@ async def admin_doctor_create(
             name=name,
             designation=designation or None,
             hospital_id=hospital_id,
+            location=location or None,
             experience_years=experience_years,
             rating=rating,
             gender=gender or None,
-            description=description or None,
+            short_description=short_description or None,
+            long_description=long_description or None,
             specialization=specialization or None,
+            qualification=qualification or None,
+            consultancy_fee=consultancy_fee,
             skills=parse_comma_separated_string(skills),
             qualifications=parse_comma_separated_string(qualifications),
             highlights=parse_comma_separated_string(highlights),
@@ -1900,11 +1918,15 @@ async def admin_doctor_update(
     name: str = Form(...),
     designation: str = Form(""),
     hospital_id: str = Form(""),
+    location: str = Form(""),
     experience_years: str = Form(""),
     rating: str = Form(""),
     gender: str = Form(""),
-    description: str = Form(""),
+    short_description: str = Form(""),
+    long_description: str = Form(""),
     specialization: str = Form(""),
+    qualification: str = Form(""),
+    consultancy_fee: str = Form(""),
     skills: str = Form(""),
     qualifications: str = Form(""),
     highlights: str = Form(""),
@@ -1946,9 +1968,15 @@ async def admin_doctor_update(
             name=name,
             designation=designation or None,
             hospital_id=int(hospital_id) if hospital_id and hospital_id.strip() else None,
+            location=location or None,
             experience_years=experience_years,
             rating=rating,
             gender=gender or None,
+            short_description=short_description or None,
+            long_description=long_description or None,
+            specialization=specialization or None,
+            qualification=qualification or None,
+            consultancy_fee=consultancy_fee,
             skills=parse_comma_separated_string(skills),
             qualifications=parse_comma_separated_string(qualifications),
             highlights=parse_comma_separated_string(highlights),
@@ -1959,11 +1987,15 @@ async def admin_doctor_update(
         doctor.name = update_data.name
         doctor.designation = update_data.designation
         doctor.hospital_id = update_data.hospital_id
+        doctor.location = update_data.location
         doctor.experience_years = update_data.experience_years
         doctor.rating = update_data.rating
         doctor.gender = update_data.gender
-        doctor.description = description or None
-        doctor.specialization = specialization or None
+        doctor.short_description = update_data.short_description
+        doctor.long_description = update_data.long_description
+        doctor.specialization = update_data.specialization
+        doctor.qualification = update_data.qualification
+        doctor.consultancy_fee = update_data.consultancy_fee
         doctor.skills = update_data.skills
         doctor.qualifications = update_data.qualifications
         doctor.highlights = update_data.highlights
