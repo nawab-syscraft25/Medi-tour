@@ -127,20 +127,51 @@
                     <h5 class="mb-3 text-primary">
                         <i class="fas fa-images"></i> Hospital Images
                     </h5>
-                    
                     <div class="mb-3">
                         <label for="images" class="form-label">Upload Images</label>
                         <input type="file" class="form-control" id="images" name="images" multiple accept="image/*">
-                        <div class="form-text">Upload multiple images of the hospital</div>
+                        <div class="form-text">Upload multiple images of the hospital. Maximum of 5 images.</div>
                     </div>
 
                     {% if hospital and hospital_images %}
                     <div class="mb-3">
-                        <label class="form-label">Current Images</label>
-                        <div class="row">
+                        <label class="form-label">Current Images (Drag to reorder)</label>
+                        <div id="hospitalImageGallery" class="row g-2">
                             {% for image in hospital_images %}
-                            <div class="col-md-3 mb-2">
-                                <img src="{{ image.url }}" class="img-fluid rounded" style="height: 150px; object-fit: cover;">
+                            <div class="col-md-3 image-item" data-image-id="{{ image.id }}" data-position="{{ image.position }}">
+                                <div class="position-relative">
+                                    <img src="{{ image.url }}" alt="Hospital Image" 
+                                         class="img-thumbnail" 
+                                         style="width: 100%; height: 120px; object-fit: cover; cursor: move;">
+                                    
+                                    <!-- Delete button -->
+                                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image" 
+                                            data-image-id="{{ image.id }}"
+                                            onclick="deleteHospitalImage('{{ image.id }}')"
+                                            style="transform: translate(50%, -50%);">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    
+                                    <!-- Primary image radio -->
+                                    <div class="position-absolute top-0 start-0 p-1">
+                                        <input type="radio" class="form-check-input set-primary" 
+                                               name="primary_image" 
+                                               value="{{ image.id }}" 
+                                               {% if image.is_primary %}checked{% endif %}
+                                               title="Set as primary image">
+                                    </div>
+                                    
+                                    <!-- Position number -->
+                                    <div class="position-absolute bottom-0 start-0 bg-dark text-white px-2 py-1 small">
+                                        <span class="position-number">{{ image.position or loop.index }}</span>
+                                    </div>
+                                    
+                                    {% if image.is_primary %}
+                                    <div class="position-absolute bottom-0 end-0 bg-warning text-dark px-2 py-1 small">
+                                        <i class="fas fa-star"></i> Primary
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
@@ -255,5 +286,119 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Hospital image management
+function deleteHospitalImage(imageId) {
+    console.log('Delete hospital image function called for image ID:', imageId);
+    
+    if (!confirm('Delete this image?')) return;
+    
+    const form = document.querySelector('form');
+    const formData = new FormData(form);
+    formData.append('delete_image_id', imageId);
+    
+    const targetUrl = window.location.href.replace('/edit', '');
+    console.log('Sending hospital image delete request to:', targetUrl);
+    
+    fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+    })
+    .then(response => {
+        console.log('Hospital image delete response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Hospital image delete response data:', data);
+        if (data.success) {
+            location.reload(); // Simple reload to refresh the page
+        } else {
+            alert('Failed to delete image: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Hospital image delete error:', error);
+        alert('Error deleting image: ' + error.message);
+    });
+}
+
+// Initialize hospital image drag and drop
+document.addEventListener('DOMContentLoaded', function() {
+    const hospitalImageGallery = document.getElementById('hospitalImageGallery');
+    if (!hospitalImageGallery) return;
+    
+    // Simple drag and drop
+    new Sortable(hospitalImageGallery, {
+        animation: 150,
+        onEnd: function() {
+            // Get new order
+            const items = hospitalImageGallery.querySelectorAll('.image-item');
+            const imageOrder = [];
+            
+            items.forEach((item, index) => {
+                const imageId = item.getAttribute('data-image-id');
+                if (imageId) {
+                    imageOrder.push({
+                        id: parseInt(imageId),
+                        position: index + 1
+                    });
+                }
+            });
+            
+            // Save order
+            const form = document.querySelector('form');
+            const formData = new FormData(form);
+            formData.append('update_image_order', 'true');
+            formData.append('image_order', JSON.stringify(imageOrder));
+            
+            fetch(window.location.href.replace('/edit', ''), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Reload to show updated positions
+                }
+            })
+            .catch(error => console.error('Error saving hospital image order:', error));
+        }
+    });
+
+    // Handle primary image selection
+    hospitalImageGallery.addEventListener('change', function(e) {
+        if (e.target.classList.contains('set-primary')) {
+            const imageId = e.target.value;
+            const form = document.querySelector('form');
+            const formData = new FormData(form);
+            formData.append('set_primary_image', imageId);
+            
+            fetch(window.location.href.replace('/edit', ''), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Reload to show updated primary image
+                } else {
+                    alert('Failed to set primary image');
+                    e.target.checked = false;
+                }
+            })
+            .catch(error => {
+                console.error('Primary image error:', error);
+                alert('Error setting primary image');
+                e.target.checked = false;
+            });
+        }
+    });
+});
 </script>
+
+<!-- Add SortableJS for drag and drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 {% endblock %}

@@ -1660,6 +1660,10 @@ async def admin_hospital_update(
     faq_questions: List[str] = Form([]),
     faq_answers: List[str] = Form([]),
     images: List[UploadFile] = File(default=[]),
+    delete_image_id: str = Form(None),
+    update_image_order: str = Form(None),
+    image_order: str = Form(None),
+    set_primary_image: str = Form(None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1687,6 +1691,73 @@ async def admin_hospital_update(
 
         if not hospital:
             raise HTTPException(status_code=404, detail="Hospital not found")
+
+        # Handle AJAX image operations
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Handle image deletion
+            if delete_image_id and delete_image_id.isdigit():
+                print(f"Processing hospital image deletion for image ID: {delete_image_id}, hospital ID: {hospital_id}")
+                image_id = int(delete_image_id)
+                # Get the image to delete
+                result = await db.execute(
+                    select(Image)
+                    .where(Image.id == image_id, Image.owner_type == "hospital", Image.owner_id == hospital_id)
+                )
+                image_to_delete = result.scalar_one_or_none()
+                
+                if image_to_delete:
+                    await db.delete(image_to_delete)
+                    await db.commit()
+                    print(f"Successfully deleted hospital image {image_id}")
+                    return {"success": True, "message": "Image deleted successfully"}
+                else:
+                    print(f"Hospital image {image_id} not found")
+                    return {"success": False, "message": "Image not found"}
+            
+            # Handle image reordering
+            if update_image_order and image_order:
+                try:
+                    order_data = json.loads(image_order)
+                    print(f"Processing hospital image reordering for hospital {hospital_id}: {order_data}")
+                    
+                    for item in order_data:
+                        image_id = item['id']
+                        new_position = item['position']
+                        
+                        await db.execute(
+                            update(Image)
+                            .where(Image.id == image_id, Image.owner_type == "hospital", Image.owner_id == hospital_id)
+                            .values(position=new_position)
+                        )
+                    
+                    await db.commit()
+                    print(f"Successfully updated hospital image positions for hospital {hospital_id}")
+                    return {"success": True, "message": "Image order updated successfully"}
+                except json.JSONDecodeError:
+                    return {"success": False, "message": "Invalid image order data"}
+            
+            # Handle primary image selection
+            if set_primary_image and set_primary_image.isdigit():
+                print(f"Processing primary image selection for hospital {hospital_id}, image {set_primary_image}")
+                image_id = int(set_primary_image)
+                
+                # First, set all images as non-primary
+                await db.execute(
+                    update(Image)
+                    .where(Image.owner_type == "hospital", Image.owner_id == hospital_id)
+                    .values(is_primary=False)
+                )
+                
+                # Then set the selected image as primary
+                await db.execute(
+                    update(Image)
+                    .where(Image.id == image_id, Image.owner_type == "hospital", Image.owner_id == hospital_id)
+                    .values(is_primary=True)
+                )
+                
+                await db.commit()
+                print(f"Successfully set hospital image {image_id} as primary")
+                return {"success": True, "message": "Primary image updated successfully"}
 
         # Update hospital fields
         update_data = HospitalUpdate(
@@ -1936,6 +2007,10 @@ async def admin_doctor_update(
     faq_answers: List[str] = Form(default=[]),
     profile_photo: UploadFile = File(default=None),
     images: List[UploadFile] = File(default=[]),
+    delete_image_id: str = Form(None),
+    update_image_order: str = Form(None),
+    image_order: str = Form(None),
+    delete_profile_photo: str = Form(None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1949,6 +2024,10 @@ async def admin_doctor_update(
     print(f"DEBUG DOCTOR: FAQ Answers received: {faq_answers}")
     print(f"DEBUG DOCTOR: Questions count: {len(faq_questions)}, Answers count: {len(faq_answers)}")
     print(f"DEBUG DOCTOR: is_featured: {is_featured}")
+    print(f"DEBUG DOCTOR: delete_image_id: {delete_image_id}")
+    print(f"DEBUG DOCTOR: update_image_order: {update_image_order}")
+    print(f"DEBUG DOCTOR: delete_profile_photo: {delete_profile_photo}")
+    print(f"DEBUG DOCTOR: Request headers: {dict(request.headers)}")
     
     try:
         # Get existing doctor
@@ -1962,6 +2041,62 @@ async def admin_doctor_update(
         if profile_photo and profile_photo.filename:
             profile_photo_filename = await save_uploaded_file(profile_photo, "doctor")
             doctor.profile_photo = f"/media/doctor/{profile_photo_filename}"
+        
+        # Handle AJAX image operations
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Handle profile photo deletion
+            if delete_profile_photo == 'true':
+                print(f"Processing profile photo deletion for doctor ID: {doctor_id}")
+                if doctor.profile_photo:
+                    doctor.profile_photo = None
+                    await db.commit()
+                    print(f"Successfully deleted profile photo for doctor {doctor_id}")
+                    return {"success": True, "message": "Profile photo deleted successfully"}
+                else:
+                    print(f"No profile photo found for doctor {doctor_id}")
+                    return {"success": False, "message": "No profile photo to delete"}
+            
+            # Handle image deletion
+            if delete_image_id and delete_image_id.isdigit():
+                print(f"Processing image deletion for image ID: {delete_image_id}, doctor ID: {doctor_id}")
+                image_id = int(delete_image_id)
+                # Get the image to delete
+                result = await db.execute(
+                    select(Image)
+                    .where(Image.id == image_id, Image.owner_type == "doctor", Image.owner_id == doctor_id)
+                )
+                image_to_delete = result.scalar_one_or_none()
+                
+                if image_to_delete:
+                    await db.delete(image_to_delete)
+                    await db.commit()
+                    print(f"Successfully deleted image {image_id}")
+                    return {"success": True, "message": "Image deleted successfully"}
+                else:
+                    print(f"Image {image_id} not found")
+                    return {"success": False, "message": "Image not found"}
+            
+            # Handle image reordering
+            if update_image_order and image_order:
+                try:
+                    order_data = json.loads(image_order)
+                    print(f"Processing image reordering for doctor {doctor_id}: {order_data}")
+                    
+                    for item in order_data:
+                        image_id = item['id']
+                        new_position = item['position']
+                        
+                        await db.execute(
+                            update(Image)
+                            .where(Image.id == image_id, Image.owner_type == "doctor", Image.owner_id == doctor_id)
+                            .values(position=new_position)
+                        )
+                    
+                    await db.commit()
+                    print(f"Successfully updated image positions for doctor {doctor_id}")
+                    return {"success": True, "message": "Image order updated successfully"}
+                except json.JSONDecodeError:
+                    return {"success": False, "message": "Invalid image order data"}
         
         # Create and validate the update data using Pydantic schema
         update_data = DoctorUpdate(
@@ -2198,22 +2333,135 @@ async def admin_treatment_update(
     faq_questions: List[str] = Form(default=[]),
     faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
+    update_image_order: str = Form(None),
+    delete_image_id: str = Form(None),
+    set_primary_image: str = Form(None),
+    image_order: str = Form(None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update existing treatment"""
+    """Update existing treatment with image management"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
     try:
-        # Get existing treatment
-        result = await db.execute(select(Treatment).where(Treatment.id == treatment_id))
+        # Get existing treatment with images
+        result = await db.execute(
+            select(Treatment)
+            .options(selectinload(Treatment.images))
+            .where(Treatment.id == treatment_id)
+        )
         treatment = result.scalar_one_or_none()
         
         if not treatment:
             raise HTTPException(status_code=404, detail="Treatment not found")
         
+        # Handle image deletion
+        if delete_image_id and delete_image_id.isdigit():
+            print(f"Processing image deletion for image ID: {delete_image_id}, treatment ID: {treatment_id}")
+            image_id = int(delete_image_id)
+            # Get the image to delete
+            result = await db.execute(
+                select(Image)
+                .where(Image.id == image_id)
+                .where(Image.owner_type == "treatment")
+                .where(Image.owner_id == treatment_id)
+            )
+            image = result.scalar_one_or_none()
+            print(f"Found image to delete: {image}")
+            
+            if image:
+                # Delete the image file
+                try:
+                    if image.url and image.url.startswith("/media/treatment/"):
+                        filepath = f"static{image.url}"
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                except Exception as e:
+                    print(f"Error deleting image file: {e}")
+                
+                # Delete the image record
+                await db.execute(
+                    delete(Image)
+                    .where(Image.id == image_id)
+                )
+                await db.commit()
+                
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return {"success": True, "message": "Image deleted successfully"}
+                return RedirectResponse(
+                    f"/admin/treatments/{treatment_id}/edit", 
+                    status_code=303,
+                    headers={"HX-Redirect": f"/admin/treatments/{treatment_id}/edit"}
+                )
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return {"success": False, "message": "Image not found"}
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        # Handle setting primary image
+        if set_primary_image and set_primary_image.isdigit():
+            image_id = int(set_primary_image)
+            
+            # First, unset any existing primary image
+            await db.execute(
+                update(Image)
+                .where(Image.owner_type == "treatment")
+                .where(Image.owner_id == treatment_id)
+                .where(Image.is_primary == True)
+                .values(is_primary=False)
+            )
+            
+            # Set the new primary image
+            await db.execute(
+                update(Image)
+                .where(Image.id == image_id)
+                .where(Image.owner_type == "treatment")
+                .where(Image.owner_id == treatment_id)
+                .values(is_primary=True)
+            )
+            
+            await db.commit()
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return {"success": True, "message": "Primary image updated successfully"}
+            return RedirectResponse(
+                f"/admin/treatments/{treatment_id}/edit", 
+                status_code=303,
+                headers={"HX-Redirect": f"/admin/treatments/{treatment_id}/edit"}
+            )
+        
+        # Handle image reordering
+        if update_image_order and image_order:
+            print(f"Processing image reordering for treatment ID: {treatment_id}")
+            print(f"Image order data: {image_order}")
+            try:
+                order_data = json.loads(image_order)
+                print(f"Parsed order data: {order_data}")
+                for item in order_data:
+                    await db.execute(
+                        update(Image)
+                        .where(Image.id == item['id'])
+                        .where(Image.owner_type == "treatment")
+                        .where(Image.owner_id == treatment_id)
+                        .values(position=item['position'])
+                    )
+                await db.commit()
+                
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return {"success": True, "message": "Image order updated successfully"}
+                return RedirectResponse(
+                    f"/admin/treatments/{treatment_id}/edit", 
+                    status_code=303,
+                    headers={"HX-Redirect": f"/admin/treatments/{treatment_id}/edit"}
+                )
+            except json.JSONDecodeError:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return {"success": False, "message": "Invalid image order data"}
+                raise HTTPException(status_code=400, detail="Invalid image order data")
+        
+        # Handle regular form submission
         # Create and validate the update data using Pydantic schema
         update_data = TreatmentUpdate(
             name=name,
@@ -2248,14 +2496,14 @@ async def admin_treatment_update(
         treatment.is_featured = is_featured
         
         # Handle new image uploads
-        # Get current image count for this treatment
         existing_images_result = await db.execute(
-            select(func.count(Image.id)).where(
-                Image.owner_type == "treatment",
-                Image.owner_id == treatment.id
-            )
+            select(Image)
+            .where(Image.owner_type == "treatment")
+            .where(Image.owner_id == treatment.id)
+            .order_by(Image.position)
         )
-        image_count = existing_images_result.scalar() or 0
+        existing_images = existing_images_result.scalars().all()
+        next_position = len(existing_images)
         
         for image_file in images:
             if image_file and image_file.filename:
@@ -2265,11 +2513,11 @@ async def admin_treatment_update(
                         owner_type="treatment",
                         owner_id=treatment.id,
                         url=f"/media/treatment/{filename}",
-                        is_primary=image_count == 0,
-                        position=image_count
+                        is_primary=next_position == 0,  # First image is primary
+                        position=next_position
                     )
                     db.add(image)
-                    image_count += 1
+                    next_position += 1
 
         # Handle FAQ updates - remove existing FAQs and create new ones
         await db.execute(delete(FAQ).where(FAQ.owner_type == "treatment", FAQ.owner_id == treatment.id))
@@ -2286,10 +2534,20 @@ async def admin_treatment_update(
                 db.add(faq)
         
         await db.commit()
+        
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return {"success": True, "message": "Treatment updated successfully"}
+            
         return RedirectResponse(url="/admin/treatments", status_code=302)
         
     except Exception as e:
         await db.rollback()
+        error_msg = f"Error updating treatment: {str(e)}"
+        print(error_msg)
+        
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return {"success": False, "message": error_msg}
+            
         hospitals = await db.execute(select(Hospital).order_by(Hospital.name))
         hospitals = hospitals.scalars().all()
         doctors = await db.execute(select(Doctor).order_by(Doctor.name))
@@ -2302,7 +2560,7 @@ async def admin_treatment_update(
             "hospitals": hospitals,
             "doctors": doctors,
             "action": "Update",
-            "error": f"Error updating treatment: {str(e)}"
+            "error": error_msg
         })
 
 # Offer CRUD Operations

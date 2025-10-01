@@ -196,8 +196,8 @@
                                 <img src="{{ doctor.profile_photo }}" alt="Profile Photo" 
                                      class="img-thumbnail profile-image" 
                                      style="width: 150px; height: 150px; object-fit: cover;">
-                                <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image-btn" 
-                                        data-image-type="profile" data-image-url="{{ doctor.profile_photo }}"
+                                <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0" 
+                                        onclick="deleteProfilePhoto()"
                                         style="transform: translate(50%, -50%);">
                                     <i class="fas fa-times"></i>
                                 </button>
@@ -222,8 +222,9 @@
                                         <img src="{{ image.url }}" alt="Additional Image" 
                                              class="img-thumbnail additional-image" 
                                              style="width: 100%; height: 120px; object-fit: cover; cursor: move;">
-                                        <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image-btn" 
-                                                data-image-type="additional" data-image-id="{{ image.id }}"
+                                        <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image" 
+                                                data-image-id="{{ image.id }}"
+                                                onclick="deleteDoctorImage('{{ image.id }}')"
                                                 style="transform: translate(50%, -50%);">
                                             <i class="fas fa-times"></i>
                                         </button>
@@ -482,23 +483,124 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Add SortableJS for better drag and drop (optional enhancement) -->
+<!-- Add SortableJS for drag and drop -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
-// Enhanced drag and drop with SortableJS
+// Simple doctor image management
+function deleteDoctorImage(imageId) {
+    console.log('Delete function called for image ID:', imageId);
+    
+    if (!confirm('Delete this image?')) return;
+    
+    const form = document.querySelector('form');
+    const formData = new FormData(form);
+    formData.append('delete_image_id', imageId);
+    
+    const targetUrl = window.location.href.replace('/edit', '');
+    console.log('Sending request to:', targetUrl);
+    
+    fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
+        if (data.success) {
+            location.reload(); // Simple reload to refresh the page
+        } else {
+            alert('Failed to delete image: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error deleting image: ' + error.message);
+    });
+}
+
+// Profile photo deletion
+function deleteProfilePhoto() {
+    console.log('Delete profile photo function called');
+    
+    if (!confirm('Delete profile photo?')) return;
+    
+    const form = document.querySelector('form');
+    const formData = new FormData(form);
+    formData.append('delete_profile_photo', 'true');
+    
+    const targetUrl = window.location.href.replace('/edit', '');
+    console.log('Sending profile photo delete request to:', targetUrl);
+    
+    fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData
+    })
+    .then(response => {
+        console.log('Profile photo delete response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Profile photo delete response data:', data);
+        if (data.success) {
+            location.reload(); // Simple reload to refresh the page
+        } else {
+            alert('Failed to delete profile photo: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Profile photo delete error:', error);
+        alert('Error deleting profile photo: ' + error.message);
+    });
+}
+
+// Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    const container = document.getElementById('additional-images-container');
-    if (container && typeof Sortable !== 'undefined') {
-        new Sortable(container, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            chosenClass: 'sortable-chosen',
-            dragClass: 'sortable-drag',
-            onEnd: function(evt) {
-                updatePositionNumbers();
-            }
-        });
-    }
+    const imageContainer = document.getElementById('additional-images-container');
+    if (!imageContainer) return;
+    
+    // Simple drag and drop
+    new Sortable(imageContainer, {
+        animation: 150,
+        onEnd: function() {
+            // Get new order
+            const items = imageContainer.querySelectorAll('.image-item');
+            const imageOrder = [];
+            
+            items.forEach((item, index) => {
+                const imageId = item.getAttribute('data-image-id');
+                if (imageId) {
+                    imageOrder.push({
+                        id: parseInt(imageId),
+                        position: index + 1
+                    });
+                }
+            });
+            
+            // Save order
+            const form = document.querySelector('form');
+            const formData = new FormData(form);
+            formData.append('update_image_order', 'true');
+            formData.append('image_order', JSON.stringify(imageOrder));
+            
+            fetch(window.location.href.replace('/edit', ''), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Reload to show updated positions
+                }
+            })
+            .catch(error => console.error('Error saving order:', error));
+        }
+    });
 });
 </script>
 
