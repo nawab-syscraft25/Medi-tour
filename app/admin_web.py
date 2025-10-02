@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -192,6 +192,12 @@ async def get_dashboard_stats(db: AsyncSession):
     stats["bookings"] = await db.scalar(select(func.count(PackageBooking.id)))
     stats["blogs"] = await db.scalar(select(func.count(Blog.id)))
     stats["published_blogs"] = await db.scalar(select(func.count(Blog.id)).where(Blog.is_published == True))
+    stats["banners"] = await db.scalar(select(func.count(Banner.id)))
+    stats["active_banners"] = await db.scalar(select(func.count(Banner.id)).where(Banner.is_active == True))
+    stats["partners"] = await db.scalar(select(func.count(PartnerHospital.id)))
+    stats["active_partners"] = await db.scalar(select(func.count(PartnerHospital.id)).where(PartnerHospital.is_active == True))
+    stats["stories"] = await db.scalar(select(func.count(PatientStory.id)))
+    stats["featured_stories"] = await db.scalar(select(func.count(PatientStory.id)).where(PatientStory.is_featured == True))
     stats["admins"] = await db.scalar(select(func.count(Admin.id)))
     stats["images"] = await db.scalar(select(func.count(Image.id)))
     
@@ -3295,3 +3301,664 @@ async def admin_blog_images(
             for img in images
         ]
     }
+
+
+# ================================
+# BANNER MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/banners", response_class=HTMLResponse)
+async def admin_banners_list(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Banner management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get all banners
+    result = await db.execute(
+        select(Banner).order_by(Banner.position.asc(), Banner.id.desc())
+    )
+    banners = result.scalars().all()
+    
+    return render_template("admin/banners.html", {
+        "request": request,
+        "admin": admin,
+        "banners": banners
+    })
+
+
+@router.get("/admin/banners/new", response_class=HTMLResponse)
+async def admin_banner_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New banner form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/banner_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Create",
+        "banner": None
+    })
+
+
+@router.post("/admin/banners/new")
+async def admin_banner_create(
+    request: Request,
+    name: str = Form(...),
+    title: str = Form(""),
+    subtitle: str = Form(""),
+    description: str = Form(""),
+    link_url: str = Form(""),
+    button_text: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    banner_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Handle image upload
+        image_url = None
+        if banner_image and banner_image.filename:
+            filename = await save_uploaded_file(banner_image, "banner")
+            image_url = f"/media/banner/{filename}"
+        
+        # Create banner
+        banner = Banner(
+            name=name,
+            title=title or None,
+            subtitle=subtitle or None,
+            description=description or None,
+            image_url=image_url,
+            link_url=link_url or None,
+            button_text=button_text or None,
+            position=position,
+            is_active=is_active
+        )
+        
+        db.add(banner)
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error creating banner: {str(e)}")
+        return render_template("admin/banner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Create",
+            "banner": None,
+            "error": f"Error creating banner: {str(e)}"
+        })
+
+
+@router.get("/admin/banners/{banner_id}/edit", response_class=HTMLResponse)
+async def admin_banner_edit(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit banner form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get banner
+    result = await db.execute(select(Banner).where(Banner.id == banner_id))
+    banner = result.scalar_one_or_none()
+    
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    return render_template("admin/banner_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Edit",
+        "banner": banner
+    })
+
+
+@router.post("/admin/banners/{banner_id}")
+async def admin_banner_update(
+    request: Request,
+    banner_id: int,
+    name: str = Form(...),
+    title: str = Form(""),
+    subtitle: str = Form(""),
+    description: str = Form(""),
+    link_url: str = Form(""),
+    button_text: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    banner_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing banner
+        result = await db.execute(select(Banner).where(Banner.id == banner_id))
+        banner = result.scalar_one_or_none()
+        
+        if not banner:
+            raise HTTPException(status_code=404, detail="Banner not found")
+        
+        # Handle image upload
+        if banner_image and banner_image.filename:
+            filename = await save_uploaded_file(banner_image, "banner")
+            banner.image_url = f"/media/banner/{filename}"
+        
+        # Update banner fields
+        banner.name = name
+        banner.title = title or None
+        banner.subtitle = subtitle or None
+        banner.description = description or None
+        banner.link_url = link_url or None
+        banner.button_text = button_text or None
+        banner.position = position
+        banner.is_active = is_active
+        banner.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating banner: {str(e)}")
+        return render_template("admin/banner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "banner": banner,
+            "error": f"Error updating banner: {str(e)}"
+        })
+
+
+@router.post("/admin/banners/{banner_id}/delete")
+async def admin_banner_delete(
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get banner
+        result = await db.execute(select(Banner).where(Banner.id == banner_id))
+        banner = result.scalar_one_or_none()
+        
+        if banner:
+            await db.delete(banner)
+            await db.commit()
+        
+        return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting banner: {str(e)}")
+
+
+# ================================
+# PARTNER HOSPITAL MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/partners", response_class=HTMLResponse)
+async def admin_partners_list(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Partner hospitals management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get all partner hospitals
+    result = await db.execute(
+        select(PartnerHospital).order_by(PartnerHospital.position.asc(), PartnerHospital.id.desc())
+    )
+    partners = result.scalars().all()
+    
+    return render_template("admin/partners.html", {
+        "request": request,
+        "admin": admin,
+        "partners": partners
+    })
+
+
+@router.get("/admin/partners/new", response_class=HTMLResponse)
+async def admin_partner_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New partner hospital form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/partner_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Create",
+        "partner": None
+    })
+
+
+@router.post("/admin/partners/new")
+async def admin_partner_create(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    website_url: str = Form(""),
+    location: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    logo_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Handle logo upload
+        logo_url = None
+        if logo_image and logo_image.filename:
+            filename = await save_uploaded_file(logo_image, "partner")
+            logo_url = f"/media/partner/{filename}"
+        
+        # Create partner
+        partner = PartnerHospital(
+            name=name,
+            description=description or None,
+            logo_url=logo_url,
+            website_url=website_url or None,
+            location=location or None,
+            position=position,
+            is_active=is_active
+        )
+        
+        db.add(partner)
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/partners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error creating partner: {str(e)}")
+        return render_template("admin/partner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Create",
+            "partner": None,
+            "error": f"Error creating partner: {str(e)}"
+        })
+
+
+@router.get("/admin/partners/{partner_id}/edit", response_class=HTMLResponse)
+async def admin_partner_edit(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit partner hospital form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get partner
+    result = await db.execute(select(PartnerHospital).where(PartnerHospital.id == partner_id))
+    partner = result.scalar_one_or_none()
+    
+    if not partner:
+        raise HTTPException(status_code=404, detail="Partner hospital not found")
+    
+    return render_template("admin/partner_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Edit",
+        "partner": partner
+    })
+
+
+@router.post("/admin/partners/{partner_id}")
+async def admin_partner_update(
+    request: Request,
+    partner_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    website_url: str = Form(""),
+    location: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    logo_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing partner
+        result = await db.execute(select(PartnerHospital).where(PartnerHospital.id == partner_id))
+        partner = result.scalar_one_or_none()
+        
+        if not partner:
+            raise HTTPException(status_code=404, detail="Partner hospital not found")
+        
+        # Handle logo upload
+        if logo_image and logo_image.filename:
+            filename = await save_uploaded_file(logo_image, "partner")
+            partner.logo_url = f"/media/partner/{filename}"
+        
+        # Update partner fields
+        partner.name = name
+        partner.description = description or None
+        partner.website_url = website_url or None
+        partner.location = location or None
+        partner.position = position
+        partner.is_active = is_active
+        partner.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/partners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating partner: {str(e)}")
+        return render_template("admin/partner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "partner": partner,
+            "error": f"Error updating partner: {str(e)}"
+        })
+
+
+@router.post("/admin/partners/{partner_id}/delete")
+async def admin_partner_delete(
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get partner
+        result = await db.execute(select(PartnerHospital).where(PartnerHospital.id == partner_id))
+        partner = result.scalar_one_or_none()
+        
+        if partner:
+            await db.delete(partner)
+            await db.commit()
+        
+        return RedirectResponse(url="/admin/partners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting partner: {str(e)}")
+
+
+# ================================
+# PATIENT STORIES MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/stories", response_class=HTMLResponse)
+async def admin_stories_list(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Patient stories management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get all patient stories
+    result = await db.execute(
+        select(PatientStory).order_by(PatientStory.position.asc(), PatientStory.id.desc())
+    )
+    stories = result.scalars().all()
+    
+    return render_template("admin/stories.html", {
+        "request": request,
+        "admin": admin,
+        "stories": stories
+    })
+
+
+@router.get("/admin/stories/new", response_class=HTMLResponse)
+async def admin_story_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New patient story form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/story_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Create",
+        "story": None
+    })
+
+
+@router.post("/admin/stories/new")
+async def admin_story_create(
+    request: Request,
+    patient_name: str = Form(...),
+    description: str = Form(...),
+    rating: int = Form(...),
+    treatment_type: str = Form(""),
+    hospital_name: str = Form(""),
+    location: str = Form(""),
+    position: int = Form(0),
+    is_featured: bool = Form(False),
+    is_active: bool = Form(False),
+    profile_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new patient story"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Validate rating
+        if rating < 1 or rating > 5:
+            raise ValueError("Rating must be between 1 and 5")
+        
+        # Handle profile photo upload
+        profile_photo = None
+        if profile_image and profile_image.filename:
+            filename = await save_uploaded_file(profile_image, "patient")
+            profile_photo = f"/media/patient/{filename}"
+        
+        # Create patient story
+        story = PatientStory(
+            patient_name=patient_name,
+            description=description,
+            rating=rating,
+            profile_photo=profile_photo,
+            treatment_type=treatment_type or None,
+            hospital_name=hospital_name or None,
+            location=location or None,
+            position=position,
+            is_featured=is_featured,
+            is_active=is_active
+        )
+        
+        db.add(story)
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/stories", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error creating patient story: {str(e)}")
+        return render_template("admin/story_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Create",
+            "story": None,
+            "error": f"Error creating patient story: {str(e)}"
+        })
+
+
+@router.get("/admin/stories/{story_id}/edit", response_class=HTMLResponse)
+async def admin_story_edit(
+    request: Request,
+    story_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit patient story form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get story
+    result = await db.execute(select(PatientStory).where(PatientStory.id == story_id))
+    story = result.scalar_one_or_none()
+    
+    if not story:
+        raise HTTPException(status_code=404, detail="Patient story not found")
+    
+    return render_template("admin/story_form.html", {
+        "request": request,
+        "admin": admin,
+        "action": "Edit",
+        "story": story
+    })
+
+
+@router.post("/admin/stories/{story_id}")
+async def admin_story_update(
+    request: Request,
+    story_id: int,
+    patient_name: str = Form(...),
+    description: str = Form(...),
+    rating: int = Form(...),
+    treatment_type: str = Form(""),
+    hospital_name: str = Form(""),
+    location: str = Form(""),
+    position: int = Form(0),
+    is_featured: bool = Form(False),
+    is_active: bool = Form(False),
+    profile_image: UploadFile = File(default=None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update patient story"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing story
+        result = await db.execute(select(PatientStory).where(PatientStory.id == story_id))
+        story = result.scalar_one_or_none()
+        
+        if not story:
+            raise HTTPException(status_code=404, detail="Patient story not found")
+        
+        # Validate rating
+        if rating < 1 or rating > 5:
+            raise ValueError("Rating must be between 1 and 5")
+        
+        # Handle profile photo upload
+        if profile_image and profile_image.filename:
+            filename = await save_uploaded_file(profile_image, "patient")
+            story.profile_photo = f"/media/patient/{filename}"
+        
+        # Update story fields
+        story.patient_name = patient_name
+        story.description = description
+        story.rating = rating
+        story.treatment_type = treatment_type or None
+        story.hospital_name = hospital_name or None
+        story.location = location or None
+        story.position = position
+        story.is_featured = is_featured
+        story.is_active = is_active
+        story.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/stories", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating patient story: {str(e)}")
+        return render_template("admin/story_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "story": story,
+            "error": f"Error updating patient story: {str(e)}"
+        })
+
+
+@router.post("/admin/stories/{story_id}/delete")
+async def admin_story_delete(
+    story_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete patient story"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get story
+        result = await db.execute(select(PatientStory).where(PatientStory.id == story_id))
+        story = result.scalar_one_or_none()
+        
+        if story:
+            await db.delete(story)
+            await db.commit()
+        
+        return RedirectResponse(url="/admin/stories", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting patient story: {str(e)}")

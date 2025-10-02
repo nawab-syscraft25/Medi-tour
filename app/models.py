@@ -257,3 +257,51 @@ class Blog(Base):
     images = relationship("Image", 
                          primaryjoin="and_(Blog.id == foreign(Image.owner_id), Image.owner_type == 'blog')",
                          lazy="select", viewonly=True)
+
+
+class Banner(Base):
+    __tablename__ = "banners"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, index=True)  # Banner name (e.g., "Home Page Banner", "About Us Banner")
+    title = Column(String(500), nullable=True)  # Banner title text
+    subtitle = Column(String(1000), nullable=True)  # Banner subtitle text
+    description = Column(Text, nullable=True)  # Banner description
+    image_url = Column(String(1000), nullable=True)  # Banner image URL
+    link_url = Column(String(1000), nullable=True)  # Optional link URL
+    button_text = Column(String(100), nullable=True)  # Button text if link exists
+    position = Column(Integer, default=0)  # For ordering banners
+    is_active = Column(Boolean, default=True)  # Active status
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PartnerHospital(Base):
+    __tablename__ = "partner_hospitals"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(300), nullable=False, index=True)  # Hospital name
+    logo_url = Column(String(1000), nullable=True)  # Hospital logo URL
+    website_url = Column(String(1000), nullable=True)  # Hospital website
+    description = Column(Text, nullable=True)  # Brief description
+    location = Column(String(500), nullable=True)  # Hospital location
+    position = Column(Integer, default=0)  # For ordering partners
+    is_active = Column(Boolean, default=True)  # Active status
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PatientStory(Base):
+    __tablename__ = "patient_stories"
+    id = Column(Integer, primary_key=True, index=True)
+    patient_name = Column(String(200), nullable=False, index=True)  # Patient name
+    description = Column(Text, nullable=False)  # Patient story/testimonial
+    rating = Column(Integer, nullable=False)  # Rating 1-5
+    profile_photo = Column(String(1000), nullable=True)  # Patient profile photo URL
+    treatment_type = Column(String(200), nullable=True)  # Type of treatment received
+    hospital_name = Column(String(300), nullable=True)  # Hospital where treated
+    location = Column(String(500), nullable=True)  # Patient location
+    date_of_treatment = Column(DateTime, nullable=True)  # When treatment was received
+    position = Column(Integer, default=0)  # For ordering stories
+    is_featured = Column(Boolean, default=False)  # Featured on homepage
+    is_active = Column(Boolean, default=True)  # Active status
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Partner Hospital - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-handshake"></i> {{ action }} Partner Hospital</h2>
+    <a href="/admin/partners" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Partners
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Partner Hospital Information</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/partners{% if partner %}/{{ partner.id }}{% else %}/new{% endif %}" enctype="multipart/form-data">
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            </div>
+            {% endif %}
+            
+            <!-- Basic Information -->
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label for="name" class="form-label">Hospital Name *</label>
+                    <input type="text" class="form-control" id="name" name="name" required
+                           value="{{ partner.name if partner else '' }}"
+                           placeholder="e.g., Apollo Hospitals, Max Healthcare">
+                    <div class="form-text">Full name of the partner hospital</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="position" class="form-label">Display Position</label>
+                    <input type="number" class="form-control" id="position" name="position" min="0"
+                           value="{{ partner.position if partner else 0 }}">
+                    <div class="form-text">Lower numbers appear first</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <textarea class="form-control" id="description" name="description" rows="3"
+                          placeholder="Brief description of the hospital and its specialties">{{ partner.description if partner and partner.description else '' }}</textarea>
+                <div class="form-text">Brief overview of the hospital's services and reputation</div>
+            </div>
+
+            <!-- Location and Contact -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="location" class="form-label">Location</label>
+                    <input type="text" class="form-control" id="location" name="location"
+                           value="{{ partner.location if partner and partner.location else '' }}"
+                           placeholder="City, State, Country">
+                    <div class="form-text">Hospital's primary location</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="website_url" class="form-label">Website URL</label>
+                    <input type="url" class="form-control" id="website_url" name="website_url"
+                           value="{{ partner.website_url if partner and partner.website_url else '' }}"
+                           placeholder="https://hospital-website.com">
+                    <div class="form-text">Official hospital website</div>
+                </div>
+            </div>
+
+            <!-- Logo Upload -->
+            <div class="mb-3">
+                <label for="logo_image" class="form-label">Hospital Logo</label>
+                <input type="file" class="form-control" id="logo_image" name="logo_image" accept="image/*">
+                <div class="form-text">Upload hospital logo (recommended: square format, 200x200px minimum)</div>
+                
+                {% if partner and partner.logo_url %}
+                <div class="mt-2">
+                    <p class="mb-1"><strong>Current Logo:</strong></p>
+                    <img src="{{ partner.logo_url }}" alt="Current Logo" class="img-thumbnail" style="max-width: 150px; height: auto;">
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Status -->
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="true" 
+                           {% if partner and partner.is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="is_active">
+                        <i class="fas fa-eye text-success"></i> Active Partner
+                    </label>
+                    <div class="form-text">Active partners will be displayed on the website</div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> {{ action }} Partner
+                </button>
+                <a href="/admin/partners" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

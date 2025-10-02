@@ -1197,3 +1197,263 @@ async def get_blog_tags(db: AsyncSession = Depends(get_db)):
                     all_tags.add(tag)
     
     return sorted(list(all_tags))
+
+
+# ================================
+# BANNER ENDPOINTS
+# ================================
+
+@router.get("/banners", response_model=List[dict])
+async def get_banners(
+    active_only: bool = Query(True, description="Get only active banners"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all banners for frontend display"""
+    query = select(models.Banner).order_by(models.Banner.position, models.Banner.created_at.desc())
+    
+    if active_only:
+        query = query.where(models.Banner.is_active == True)
+    
+    result = await db.execute(query)
+    banners = result.scalars().all()
+    
+    return [
+        {
+            "id": banner.id,
+            "name": banner.name,
+            "title": banner.title,
+            "subtitle": banner.subtitle,
+            "description": banner.description,
+            "image_url": banner.image_url,
+            "link_url": banner.link_url,
+            "button_text": banner.button_text,
+            "position": banner.position,
+            "is_active": banner.is_active,
+            "created_at": banner.created_at
+        }
+        for banner in banners
+    ]
+
+
+@router.get("/banners/{banner_id}", response_model=dict)
+async def get_banner(banner_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific banner by ID"""
+    result = await db.execute(select(models.Banner).where(models.Banner.id == banner_id))
+    banner = result.scalar_one_or_none()
+    
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    return {
+        "id": banner.id,
+        "name": banner.name,
+        "title": banner.title,
+        "subtitle": banner.subtitle,
+        "description": banner.description,
+        "image_url": banner.image_url,
+        "link_url": banner.link_url,
+        "button_text": banner.button_text,
+        "position": banner.position,
+        "is_active": banner.is_active,
+        "created_at": banner.created_at
+    }
+
+
+# ================================
+# PARTNER HOSPITAL ENDPOINTS
+# ================================
+
+@router.get("/partners", response_model=List[dict])
+async def get_partners(
+    active_only: bool = Query(True, description="Get only active partners"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all partner hospitals for frontend display"""
+    query = select(models.PartnerHospital).order_by(models.PartnerHospital.position, models.PartnerHospital.created_at.desc())
+    
+    if active_only:
+        query = query.where(models.PartnerHospital.is_active == True)
+    
+    result = await db.execute(query)
+    partners = result.scalars().all()
+    
+    return [
+        {
+            "id": partner.id,
+            "name": partner.name,
+            "description": partner.description,
+            "logo_url": partner.logo_url,
+            "website_url": partner.website_url,
+            "location": partner.location,
+            "position": partner.position,
+            "is_active": partner.is_active,
+            "created_at": partner.created_at
+        }
+        for partner in partners
+    ]
+
+
+@router.get("/partners/{partner_id}", response_model=dict)
+async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific partner hospital by ID"""
+    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
+    partner = result.scalar_one_or_none()
+    
+    if not partner:
+        raise HTTPException(status_code=404, detail="Partner hospital not found")
+    
+    return {
+        "id": partner.id,
+        "name": partner.name,
+        "description": partner.description,
+        "logo_url": partner.logo_url,
+        "website_url": partner.website_url,
+        "location": partner.location,
+        "position": partner.position,
+        "is_active": partner.is_active,
+        "created_at": partner.created_at
+    }
+
+
+# ================================
+# PATIENT STORY ENDPOINTS
+# ================================
+
+@router.get("/stories", response_model=List[dict])
+async def get_patient_stories(
+    active_only: bool = Query(True, description="Get only active stories"),
+    featured_only: bool = Query(False, description="Get only featured stories"),
+    limit: int = Query(10, ge=1, le=50, description="Number of stories to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get patient stories for frontend display"""
+    query = select(models.PatientStory).order_by(models.PatientStory.position, models.PatientStory.created_at.desc())
+    
+    if active_only:
+        query = query.where(models.PatientStory.is_active == True)
+    
+    if featured_only:
+        query = query.where(models.PatientStory.is_featured == True)
+    
+    query = query.limit(limit)
+    
+    result = await db.execute(query)
+    stories = result.scalars().all()
+    
+    return [
+        {
+            "id": story.id,
+            "patient_name": story.patient_name,
+            "description": story.description,
+            "rating": story.rating,
+            "profile_photo": story.profile_photo,
+            "treatment_type": story.treatment_type,
+            "hospital_name": story.hospital_name,
+            "location": story.location,
+            "position": story.position,
+            "is_featured": story.is_featured,
+            "is_active": story.is_active,
+            "created_at": story.created_at
+        }
+        for story in stories
+    ]
+
+
+@router.get("/stories/{story_id}", response_model=dict)
+async def get_patient_story(story_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific patient story by ID"""
+    result = await db.execute(select(models.PatientStory).where(models.PatientStory.id == story_id))
+    story = result.scalar_one_or_none()
+    
+    if not story:
+        raise HTTPException(status_code=404, detail="Patient story not found")
+    
+    return {
+        "id": story.id,
+        "patient_name": story.patient_name,
+        "description": story.description,
+        "rating": story.rating,
+        "profile_photo": story.profile_photo,
+        "treatment_type": story.treatment_type,
+        "hospital_name": story.hospital_name,
+        "location": story.location,
+        "position": story.position,
+        "is_featured": story.is_featured,
+        "is_active": story.is_active,
+        "created_at": story.created_at
+    }
+
+
+@router.get("/stories/featured", response_model=List[dict])
+async def get_featured_stories(
+    limit: int = Query(5, ge=1, le=20, description="Number of featured stories to return"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get featured patient stories for homepage/highlights"""
+    query = select(models.PatientStory).where(
+        and_(
+            models.PatientStory.is_active == True,
+            models.PatientStory.is_featured == True
+        )
+    ).order_by(models.PatientStory.position, models.PatientStory.created_at.desc()).limit(limit)
+    
+    result = await db.execute(query)
+    stories = result.scalars().all()
+    
+    return [
+        {
+            "id": story.id,
+            "patient_name": story.patient_name,
+            "description": story.description,
+            "rating": story.rating,
+            "profile_photo": story.profile_photo,
+            "treatment_type": story.treatment_type,
+            "hospital_name": story.hospital_name,
+            "location": story.location,
+            "position": story.position,
+            "is_featured": story.is_featured,
+            "is_active": story.is_active,
+            "created_at": story.created_at
+        }
+        for story in stories
+    ]
+
+
+# ================================
+# FILTER ENDPOINTS FOR NEW MODELS
+# ================================
+
+@router.get("/filters/treatment-types", response_model=List[str])
+async def get_treatment_types(db: AsyncSession = Depends(get_db)):
+    """Get all unique treatment types from patient stories"""
+    result = await db.execute(
+        select(models.PatientStory.treatment_type).distinct().where(
+            and_(
+                models.PatientStory.treatment_type.isnot(None),
+                models.PatientStory.is_active == True
+            )
+        )
+    )
+    treatment_types = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_types = [t.strip() for t in treatment_types if t and t.strip()]
+    return sorted(valid_types)
+
+
+@router.get("/filters/story-hospitals", response_model=List[str])
+async def get_story_hospitals(db: AsyncSession = Depends(get_db)):
+    """Get all unique hospital names from patient stories"""
+    result = await db.execute(
+        select(models.PatientStory.hospital_name).distinct().where(
+            and_(
+                models.PatientStory.hospital_name.isnot(None),
+                models.PatientStory.is_active == True
+            )
+        )
+    )
+    hospitals = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_hospitals = [h.strip() for h in hospitals if h and h.strip()]
+    return sorted(valid_hospitals)

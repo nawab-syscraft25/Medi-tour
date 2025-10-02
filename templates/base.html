@@ -499,6 +499,24 @@
                     <span>Blogs / Articles</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/banners' in request.url.path %}active{% endif %}" href="/admin/banners">
+                    <i class="fas fa-image"></i>
+                    <span>Banners</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/partners' in request.url.path %}active{% endif %}" href="/admin/partners">
+                    <i class="fas fa-handshake"></i>
+                    <span>Partner Hospitals</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/stories' in request.url.path %}active{% endif %}" href="/admin/stories">
+                    <i class="fas fa-heart"></i>
+                    <span>Patient Stories</span>
+                </a>
+            </li>
 
             <div class="nav-group-title">Customer Relations</div>
 

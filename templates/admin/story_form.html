@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Patient Story - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-heart"></i> {{ action }} Patient Story</h2>
+    <a href="/admin/stories" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Stories
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Patient Story Information</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/admin/stories{% if story %}/{{ story.id }}{% else %}/new{% endif %}" enctype="multipart/form-data">
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            </div>
+            {% endif %}
+            
+            <!-- Patient Information -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="patient_name" class="form-label">Patient Name *</label>
+                    <input type="text" class="form-control" id="patient_name" name="patient_name" required
+                           value="{{ story.patient_name if story else '' }}"
+                           placeholder="e.g., John Smith">
+                    <div class="form-text">Patient's full name or preferred name</div>
+                </div>
+                <div class="col-md-6">
+                    <label for="location" class="form-label">Patient Location</label>
+                    <input type="text" class="form-control" id="location" name="location"
+                           value="{{ story.location if story and story.location else '' }}"
+                           placeholder="City, Country">
+                    <div class="form-text">Where the patient is from</div>
+                </div>
+            </div>
+
+            <!-- Story Content -->
+            <div class="mb-3">
+                <label for="description" class="form-label">Patient Story *</label>
+                <textarea class="form-control" id="description" name="description" rows="5" required
+                          placeholder="Share the patient's experience, treatment journey, and outcome...">{{ story.description if story else '' }}</textarea>
+                <div class="form-text">Detailed testimonial from the patient about their experience</div>
+            </div>
+
+            <!-- Rating and Treatment Info -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="rating" class="form-label">Rating *</label>
+                    <select class="form-select" id="rating" name="rating" required>
+                        <option value="">Select Rating</option>
+                        {% for i in range(1, 6) %}
+                        <option value="{{ i }}" {% if story and story.rating == i %}selected{% endif %}>
+                            {{ i }} Star{% if i > 1 %}s{% endif %} 
+                            {% for j in range(i) %}★{% endfor %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Patient's overall satisfaction rating</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="treatment_type" class="form-label">Treatment Type</label>
+                    <input type="text" class="form-control" id="treatment_type" name="treatment_type"
+                           value="{{ story.treatment_type if story and story.treatment_type else '' }}"
+                           placeholder="e.g., Cardiac Surgery, Orthopedic">
+                    <div class="form-text">Type of medical treatment received</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="hospital_name" class="form-label">Hospital Name</label>
+                    <input type="text" class="form-control" id="hospital_name" name="hospital_name"
+                           value="{{ story.hospital_name if story and story.hospital_name else '' }}"
+                           placeholder="e.g., Apollo Hospitals">
+                    <div class="form-text">Hospital where treatment was received</div>
+                </div>
+            </div>
+
+            <!-- Profile Photo -->
+            <div class="mb-3">
+                <label for="profile_image" class="form-label">Patient Profile Photo</label>
+                <input type="file" class="form-control" id="profile_image" name="profile_image" accept="image/*">
+                <div class="form-text">Upload patient's photo (optional, with patient consent)</div>
+                
+                {% if story and story.profile_photo %}
+                <div class="mt-2">
+                    <p class="mb-1"><strong>Current Photo:</strong></p>
+                    <img src="{{ story.profile_photo }}" alt="Current Photo" class="img-thumbnail rounded-circle" style="width: 80px; height: 80px; object-fit: cover;">
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Display Settings -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="position" class="form-label">Display Position</label>
+                    <input type="number" class="form-control" id="position" name="position" min="0"
+                           value="{{ story.position if story else 0 }}">
+                    <div class="form-text">Lower numbers appear first</div>
+                </div>
+            </div>
+
+            <!-- Status Options -->
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="true" 
+                           {% if story and story.is_featured %}checked{% endif %}>
+                    <label class="form-check-label" for="is_featured">
+                        <i class="fas fa-star text-warning"></i> Featured Story
+                    </label>
+                    <div class="form-text">Featured stories will be highlighted prominently</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="true" 
+                           {% if story and story.is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="is_active">
+                        <i class="fas fa-eye text-success"></i> Active Story
+                    </label>
+                    <div class="form-text">Active stories will be displayed on the website</div>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> {{ action }} Story
+                </button>
+                <a href="/admin/stories" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
