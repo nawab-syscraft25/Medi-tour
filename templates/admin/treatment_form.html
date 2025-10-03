@@ -24,8 +24,6 @@
             <div class="card-body">
                 <form method="POST" action="/admin/treatments{% if treatment %}/{{ treatment.id }}{% endif %}" enctype="multipart/form-data">
                     <!-- Hidden fields for image management -->
-                    <input type="hidden" name="faq_questions[]" value="">
-                    <input type="hidden" name="faq_answers[]" value="">
                     <input type="hidden" id="image_order" name="image_order" value="">
                     <input type="hidden" name="update_image_order" value="">
                     <input type="hidden" name="delete_image_id" value="">
@@ -253,6 +251,84 @@
                         </div>
                     </div>
 
+                    <!-- FAQ Management -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0"><i class="fas fa-question-circle"></i> Frequently Asked Questions</h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- FAQ 1 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 1 - Question:</label>
+                                    <input type="text" class="form-control" name="faq1_question" 
+                                           value="{{ treatment.faq1_question or '' }}" placeholder="Enter question 1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 1 - Answer:</label>
+                                    <textarea class="form-control" name="faq1_answer" rows="2" 
+                                              placeholder="Enter answer 1">{{ treatment.faq1_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 2 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 2 - Question:</label>
+                                    <input type="text" class="form-control" name="faq2_question" 
+                                           value="{{ treatment.faq2_question or '' }}" placeholder="Enter question 2">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 2 - Answer:</label>
+                                    <textarea class="form-control" name="faq2_answer" rows="2" 
+                                              placeholder="Enter answer 2">{{ treatment.faq2_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 3 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 3 - Question:</label>
+                                    <input type="text" class="form-control" name="faq3_question" 
+                                           value="{{ treatment.faq3_question or '' }}" placeholder="Enter question 3">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 3 - Answer:</label>
+                                    <textarea class="form-control" name="faq3_answer" rows="2" 
+                                              placeholder="Enter answer 3">{{ treatment.faq3_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 4 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 4 - Question:</label>
+                                    <input type="text" class="form-control" name="faq4_question" 
+                                           value="{{ treatment.faq4_question or '' }}" placeholder="Enter question 4">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 4 - Answer:</label>
+                                    <textarea class="form-control" name="faq4_answer" rows="2" 
+                                              placeholder="Enter answer 4">{{ treatment.faq4_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 5 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 5 - Question:</label>
+                                    <input type="text" class="form-control" name="faq5_question" 
+                                           value="{{ treatment.faq5_question or '' }}" placeholder="Enter question 5">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 5 - Answer:</label>
+                                    <textarea class="form-control" name="faq5_answer" rows="2" 
+                                              placeholder="Enter answer 5">{{ treatment.faq5_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Submit Button -->
                     <div class="d-flex justify-content-between">
                         <a href="/admin/treatments" class="btn btn-outline-secondary">
@@ -353,6 +429,10 @@
 </div>
 
 <script>
+// Global variables
+const TREATMENT_ID = {% if treatment and treatment.id %}{{ treatment.id }}{% else %}null{% endif %};
+console.log('TREATMENT_ID initialized:', TREATMENT_ID, typeof TREATMENT_ID);
+
 // Simple global functions
 function deleteImageById(imageId) {
     if (!confirm('Delete this image?')) return;
@@ -536,6 +616,70 @@ function showSuccessMessage(message) {
                 successMsg.remove();
             }
         }, 5000);
+    }
+}
+
+// Simple FAQ Management Functions
+function addFAQRow() {
+    console.log('addFAQRow called');
+    const faqHtml = `
+        <div class="faq-row border rounded p-3 mb-3">
+            <input type="hidden" name="faq_ids[]" value="">
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Question:</label>
+                    <input type="text" class="form-control" name="faq_questions[]" 
+                           placeholder="Enter the question">
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Answer:</label>
+                    <textarea class="form-control" name="faq_answers[]" rows="3" 
+                              placeholder="Enter the answer"></textarea>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">Position:</label>
+                    <input type="number" class="form-control" name="faq_positions[]" 
+                           value="0" min="0">
+                </div>
+                <div class="col-md-6 d-flex align-items-end justify-content-between">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="faq_active[]" 
+                               value="1" checked>
+                        <label class="form-check-label">Active</label>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removeFAQRow(this)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Hide no-faqs message if it exists
+    const noFaqsMessage = document.getElementById('no-faqs-message');
+    if (noFaqsMessage) {
+        noFaqsMessage.style.display = 'none';
+    }
+    
+    // Add the new FAQ row
+    document.getElementById('faq-container').insertAdjacentHTML('beforeend', faqHtml);
+}
+
+function removeFAQRow(button) {
+    const faqRow = button.closest('.faq-row');
+    faqRow.remove();
+    
+    // Show no-faqs message if no FAQs left
+    const remainingFaqs = document.querySelectorAll('.faq-row').length;
+    if (remainingFaqs === 0) {
+        const noFaqsMessage = document.getElementById('no-faqs-message');
+        if (noFaqsMessage) {
+            noFaqsMessage.style.display = 'block';
+        }
     }
 }
 </script>

@@ -61,6 +61,17 @@ class Hospital(Base):
     rating = Column(Float, nullable=True)
     features = Column(Text, nullable=True)    # comma-separated one-liners
     facilities = Column(Text, nullable=True)  # comma-separated keywords
+    # Simple FAQ fields
+    faq1_question = Column(Text, nullable=True)
+    faq1_answer = Column(Text, nullable=True)
+    faq2_question = Column(Text, nullable=True)
+    faq2_answer = Column(Text, nullable=True)
+    faq3_question = Column(Text, nullable=True)
+    faq3_answer = Column(Text, nullable=True)
+    faq4_question = Column(Text, nullable=True)
+    faq4_answer = Column(Text, nullable=True)
+    faq5_question = Column(Text, nullable=True)
+    faq5_answer = Column(Text, nullable=True)
     is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -93,6 +104,17 @@ class Doctor(Base):
     qualifications = Column(Text, nullable=True)   # detailed qualifications
     highlights = Column(Text, nullable=True)
     awards = Column(Text, nullable=True)
+    # Simple FAQ fields
+    faq1_question = Column(Text, nullable=True)
+    faq1_answer = Column(Text, nullable=True)
+    faq2_question = Column(Text, nullable=True)
+    faq2_answer = Column(Text, nullable=True)
+    faq3_question = Column(Text, nullable=True)
+    faq3_answer = Column(Text, nullable=True)
+    faq4_question = Column(Text, nullable=True)
+    faq4_answer = Column(Text, nullable=True)
+    faq5_question = Column(Text, nullable=True)
+    faq5_answer = Column(Text, nullable=True)
     is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -139,6 +161,17 @@ class Treatment(Base):
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="SET NULL"), nullable=True)
     other_doctor_name = Column(String(300), nullable=True)
     location = Column(String(500), nullable=True)
+    # Simple FAQ fields
+    faq1_question = Column(Text, nullable=True)
+    faq1_answer = Column(Text, nullable=True)
+    faq2_question = Column(Text, nullable=True)
+    faq2_answer = Column(Text, nullable=True)
+    faq3_question = Column(Text, nullable=True)
+    faq3_answer = Column(Text, nullable=True)
+    faq4_question = Column(Text, nullable=True)
+    faq4_answer = Column(Text, nullable=True)
+    faq5_question = Column(Text, nullable=True)
+    faq5_answer = Column(Text, nullable=True)
     is_featured = Column(Boolean, default=False, index=True)  # featured on homepage
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="tours", lazy="noload")

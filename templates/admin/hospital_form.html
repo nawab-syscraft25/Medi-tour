@@ -190,8 +190,83 @@
                         </div>
                     </div>
 
-                    <!-- FAQ Section -->
-                    <!-- FAQ Section removed -->
+                    <!-- FAQ Management -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0"><i class="fas fa-question-circle"></i> Frequently Asked Questions</h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- FAQ 1 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 1 - Question:</label>
+                                    <input type="text" class="form-control" name="faq1_question" 
+                                           value="{{ hospital.faq1_question or '' }}" placeholder="Enter question 1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 1 - Answer:</label>
+                                    <textarea class="form-control" name="faq1_answer" rows="2" 
+                                              placeholder="Enter answer 1">{{ hospital.faq1_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 2 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 2 - Question:</label>
+                                    <input type="text" class="form-control" name="faq2_question" 
+                                           value="{{ hospital.faq2_question or '' }}" placeholder="Enter question 2">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 2 - Answer:</label>
+                                    <textarea class="form-control" name="faq2_answer" rows="2" 
+                                              placeholder="Enter answer 2">{{ hospital.faq2_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 3 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 3 - Question:</label>
+                                    <input type="text" class="form-control" name="faq3_question" 
+                                           value="{{ hospital.faq3_question or '' }}" placeholder="Enter question 3">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 3 - Answer:</label>
+                                    <textarea class="form-control" name="faq3_answer" rows="2" 
+                                              placeholder="Enter answer 3">{{ hospital.faq3_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 4 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 4 - Question:</label>
+                                    <input type="text" class="form-control" name="faq4_question" 
+                                           value="{{ hospital.faq4_question or '' }}" placeholder="Enter question 4">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 4 - Answer:</label>
+                                    <textarea class="form-control" name="faq4_answer" rows="2" 
+                                              placeholder="Enter answer 4">{{ hospital.faq4_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                            
+                            <!-- FAQ 5 -->
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 5 - Question:</label>
+                                    <input type="text" class="form-control" name="faq5_question" 
+                                           value="{{ hospital.faq5_question or '' }}" placeholder="Enter question 5">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">FAQ 5 - Answer:</label>
+                                    <textarea class="form-control" name="faq5_answer" rows="2" 
+                                              placeholder="Enter answer 5">{{ hospital.faq5_answer or '' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Action Buttons -->
                     <div class="d-flex justify-content-between">
