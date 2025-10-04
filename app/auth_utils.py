@@ -91,8 +91,8 @@ def send_verification_email(to_email: str, token: str, user_name: str, base_url:
     subject = "Verify Your Email - Medi-tour"
     
     # Use current domain or fallback to localhost
-    if not base_url:
-        base_url = "http://165.22.223.163:8001"
+    
+    base_url = "http://165.22.223.163:8001"
     
     verification_url = f"{base_url}/api/v1/verify-email?token={token}"
     
@@ -119,8 +119,7 @@ def send_password_reset_email(to_email: str, token: str, user_name: str, base_ur
     subject = "Reset Your Password - Medi-tour"
     
     # Use current domain or fallback to localhost
-    if not base_url:
-        base_url = "http://127.0.0.1:8000"
+    base_url = "http://165.22.223.163:8001"
     
     reset_url = f"{base_url}/api/v1/reset-password?token={token}"
     

@@ -1198,7 +1198,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
                 <h1 class="success">✅ Email Verified Successfully!</h1>
                 <p>Your email address <span class="email">{user.email}</span> has been verified.</p>
                 <p>You can now access all features of Medi-tour.</p>
-                <a href="{base_url}" class="btn">Go to Home</a>
+                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
             </div>
         </body>
         </html>
@@ -1225,7 +1225,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
             <div class="container">
                 <h1 class="error">❌ Something went wrong</h1>
                 <p>An error occurred while verifying your email. Please try again later.</p>
-                <a href="{base_url}" class="btn">Go to Home</a>
+                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
             </div>
         </body>
         </html>
