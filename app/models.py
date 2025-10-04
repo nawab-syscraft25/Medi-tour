@@ -216,6 +216,23 @@ class Admin(Base):
     last_login = Column(DateTime, nullable=True)
 
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(250), nullable=False)
+    email = Column(String(300), unique=True, index=True, nullable=False)
+    phone = Column(String(80), nullable=True)
+    password_hash = Column(String(255), nullable=False)  # bcrypt hashed password
+    is_email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(255), nullable=True)
+    email_verification_expires = Column(DateTime, nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+
+
 class ContactUs(Base):
     __tablename__ = "contact_us"
     id = Column(Integer, primary_key=True, index=True)

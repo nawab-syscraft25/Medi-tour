@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, validator, ConfigDict
+from pydantic import Field
 
 
 # Base schemas
@@ -802,6 +803,46 @@ class BlogResponse(BlogBase, BaseSchema):
         if self.reading_time:
             return f"{self.reading_time} min read"
         return "Quick read"
+
+
+# User Authentication schemas
+class UserSignUp(BaseModel):
+    name: str = Field(..., min_length=2, max_length=250)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=80)
+    password: str = Field(..., min_length=6, max_length=100)
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseSchema):
+    id: int
+    name: str
+    email: str
+    phone: Optional[str] = None
+    is_email_verified: bool
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime] = None
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6, max_length=100)
+
+class VerifyEmail(BaseModel):
+    token: str
+
+class ResendVerification(BaseModel):
+    email: EmailStr
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 
 
 # Update forward references

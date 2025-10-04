@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_base_url: Optional[str] = None
     
-    # Upload settings
     max_upload_size: int = 5242880  # 5MB
     allowed_image_extensions: str = "jpg,jpeg,png,webp,gif"
     allowed_doc_extensions: str = "pdf,doc,docx"
@@ -28,6 +27,13 @@ class Settings(BaseSettings):
     # Security
     secret_key: str
     access_token_expire_minutes: int = 30
+    
+    # SMTP Email Configuration
+    smtp_server: Optional[str] = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    from_email: Optional[str] = None
     
     @property
     def is_production(self) -> bool:

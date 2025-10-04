@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
 from app.db import get_db
 from app import models, schemas
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, get_current_user
 
 
 def hospital_to_dict(hospital: models.Hospital) -> dict:
@@ -650,6 +651,660 @@ async def delete_doctor(
     await db.delete(doctor)
     await db.commit()
     return {"message": "Doctor deleted"}
+
+
+# Global Search endpoint
+@router.get("/search")
+async def global_search(
+    query: str = Query(..., min_length=2, description="Search query (minimum 2 characters)"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results per category"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Global search across doctors, treatments, and hospitals
+    Returns results from all three categories based on the search query
+    """
+    if len(query.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Search query must be at least 2 characters long")
+    
+    search_term = f"%{query.strip()}%"
+    
+    # Search Doctors
+    doctors_query = select(models.Doctor).where(
+        or_(
+            models.Doctor.name.ilike(search_term),
+            models.Doctor.designation.ilike(search_term),
+            models.Doctor.specialization.ilike(search_term),
+            models.Doctor.qualification.ilike(search_term),
+            models.Doctor.skills.ilike(search_term),
+            models.Doctor.location.ilike(search_term),
+            models.Doctor.short_description.ilike(search_term),
+            models.Doctor.long_description.ilike(search_term)
+        )
+    ).where(models.Doctor.is_active == True).limit(limit)
+    
+    # Search Treatments
+    treatments_query = select(models.Treatment).where(
+        or_(
+            models.Treatment.name.ilike(search_term),
+            models.Treatment.treatment_type.ilike(search_term),
+            models.Treatment.short_description.ilike(search_term),
+            models.Treatment.long_description.ilike(search_term),
+            models.Treatment.location.ilike(search_term)
+        )
+    ).limit(limit)
+    
+    # Search Hospitals
+    hospitals_query = select(models.Hospital).where(
+        or_(
+            models.Hospital.name.ilike(search_term),
+            models.Hospital.description.ilike(search_term),
+            models.Hospital.location.ilike(search_term),
+            models.Hospital.specializations.ilike(search_term),
+            models.Hospital.features.ilike(search_term),
+            models.Hospital.facilities.ilike(search_term)
+        )
+    ).where(models.Hospital.is_active == True).limit(limit)
+    
+    # Execute all queries
+    doctors_result = await db.execute(doctors_query)
+    treatments_result = await db.execute(treatments_query)
+    hospitals_result = await db.execute(hospitals_query)
+    
+    doctors = doctors_result.scalars().all()
+    treatments = treatments_result.scalars().all()
+    hospitals = hospitals_result.scalars().all()
+    
+    # Convert to dictionaries (simplified version without loading images/FAQs for performance)
+    doctor_results = [doctor_to_dict(doctor) for doctor in doctors]
+    treatment_results = [treatment_to_dict(treatment) for treatment in treatments]
+    hospital_results = [hospital_to_dict(hospital) for hospital in hospitals]
+    
+    return {
+        "query": query,
+        "total_results": len(doctors) + len(treatments) + len(hospitals),
+        "results": {
+            "doctors": {
+                "count": len(doctors),
+                "data": doctor_results
+            },
+            "treatments": {
+                "count": len(treatments),
+                "data": treatment_results
+            },
+            "hospitals": {
+                "count": len(hospitals),
+                "data": hospital_results
+            }
+        }
+    }
+
+
+# User Authentication endpoints
+@router.post("/auth/signup", response_model=schemas.TokenResponse)
+async def user_signup(
+    user_data: schemas.UserSignUp,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """User registration with email verification"""
+    from app.auth_utils import hash_password, generate_verification_token, send_verification_email, create_access_token, user_to_dict
+    from datetime import datetime, timedelta
+    
+    # Check if user already exists
+    existing_user = await db.execute(
+        select(models.User).where(models.User.email == user_data.email)
+    )
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    verification_token = generate_verification_token()
+    verification_expires = datetime.utcnow() + timedelta(hours=24)
+    
+    db_user = models.User(
+        name=user_data.name,
+        email=user_data.email,
+        phone=user_data.phone,
+        password_hash=hash_password(user_data.password),
+        email_verification_token=verification_token,
+        email_verification_expires=verification_expires
+    )
+    
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    
+    # Send verification email
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    send_verification_email(user_data.email, verification_token, user_data.name, base_url)
+    
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": str(db_user.id), "type": "user"}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user_to_dict(db_user)
+    }
+
+@router.post("/auth/login", response_model=schemas.TokenResponse)
+async def user_login(
+    user_credentials: schemas.UserLogin,
+    db: AsyncSession = Depends(get_db)
+):
+    """User login"""
+    from app.auth_utils import verify_password, create_access_token, user_to_dict
+    from datetime import datetime
+    
+    # Get user by email
+    result = await db.execute(
+        select(models.User).where(models.User.email == user_credentials.email)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user or not verify_password(user_credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is inactive"
+        )
+    
+    # Update last login
+    user.last_login = datetime.utcnow()
+    await db.commit()
+    
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": str(user.id), "type": "user"}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user_to_dict(user)
+    }
+
+@router.post("/auth/verify-email")
+async def verify_email(
+    verification_data: schemas.VerifyEmail,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify user email with token"""
+    from datetime import datetime
+    
+    # Find user with verification token
+    result = await db.execute(
+        select(models.User).where(
+            models.User.email_verification_token == verification_data.token
+        )
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification token"
+        )
+    
+    if user.email_verification_expires < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token has expired"
+        )
+    
+    # Mark email as verified
+    user.is_email_verified = True
+    user.email_verification_token = None
+    user.email_verification_expires = None
+    await db.commit()
+    
+    return {"message": "Email verified successfully"}
+
+@router.post("/auth/resend-verification")
+async def resend_verification(
+    resend_data: schemas.ResendVerification,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Resend email verification"""
+    from app.auth_utils import generate_verification_token, send_verification_email
+    from datetime import datetime, timedelta
+    
+    # Get user by email
+    result = await db.execute(
+        select(models.User).where(models.User.email == resend_data.email)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified"
+        )
+    
+    # Generate new verification token
+    verification_token = generate_verification_token()
+    verification_expires = datetime.utcnow() + timedelta(hours=24)
+    
+    user.email_verification_token = verification_token
+    user.email_verification_expires = verification_expires
+    await db.commit()
+    
+    # Send verification email
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    send_verification_email(user.email, verification_token, user.name, base_url)
+    
+    return {"message": "Verification email sent successfully"}
+
+@router.post("/auth/forgot-password")
+async def forgot_password(
+    forgot_data: schemas.ForgotPassword,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Send password reset email"""
+    from app.auth_utils import generate_verification_token, send_password_reset_email
+    from datetime import datetime, timedelta
+    
+    # Get user by email
+    result = await db.execute(
+        select(models.User).where(models.User.email == forgot_data.email)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        # Don't reveal if email exists or not for security
+        return {"message": "If the email exists, a password reset link has been sent"}
+    
+    # Generate password reset token
+    reset_token = generate_verification_token()
+    reset_expires = datetime.utcnow() + timedelta(hours=1)
+    
+    user.password_reset_token = reset_token
+    user.password_reset_expires = reset_expires
+    await db.commit()
+    
+    # Send password reset email
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    send_password_reset_email(user.email, reset_token, user.name, base_url)
+    
+    return {"message": "If the email exists, a password reset link has been sent"}
+
+@router.post("/auth/reset-password")
+async def reset_password(
+    reset_data: schemas.ResetPassword,
+    db: AsyncSession = Depends(get_db)
+):
+    """Reset password with token"""
+    from app.auth_utils import hash_password
+    from datetime import datetime
+    
+    # Find user with reset token
+    result = await db.execute(
+        select(models.User).where(
+            models.User.password_reset_token == reset_data.token
+        )
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset token"
+        )
+    
+    if user.password_reset_expires < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired"
+        )
+    
+    # Update password
+    user.password_hash = hash_password(reset_data.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    await db.commit()
+    
+    return {"message": "Password reset successfully"}
+
+# Frontend verification endpoints (for email links)
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Handle email verification from email link"""
+    from app.auth_utils import get_user_by_email
+    from datetime import datetime
+    
+    # Get base URL for home link
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    
+    try:
+        # Find user by verification token
+        result = await db.execute(
+            select(models.User).where(
+                and_(
+                    models.User.email_verification_token == token,
+                    models.User.email_verification_expires > datetime.utcnow()
+                )
+            )
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            # Return error page
+            return f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Verification Failed - Medi-tour</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                    .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+                    .error {{ color: #e74c3c; }}
+                    .btn {{ display: inline-block; padding: 12px 24px; background-color: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                    .btn:hover {{ background-color: #2980b9; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="error">❌ Verification Failed</h1>
+                    <p>The verification token is invalid or has expired.</p>
+                    <p>Please request a new verification email or contact support.</p>
+                    <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                </div>
+            </body>
+            </html>
+            """
+        
+        # Verify the user
+        user.is_email_verified = True
+        user.email_verification_token = None
+        user.email_verification_expires = None
+        await db.commit()
+        
+        # Return success page
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Email Verified - Medi-tour</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+                .success {{ color: #27ae60; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background-color: #27ae60; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .btn:hover {{ background-color: #229954; }}
+                .email {{ color: #7f8c8d; font-style: italic; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="success">✅ Email Verified Successfully!</h1>
+                <p>Your email address <span class="email">{user.email}</span> has been verified.</p>
+                <p>You can now access all features of Medi-tour.</p>
+                <a href="{base_url}" class="btn">Go to Home</a>
+            </div>
+        </body>
+        </html>
+        """
+        
+    except Exception as e:
+        # Return generic error page
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Error - Medi-tour</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+                .error {{ color: #e74c3c; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background-color: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .btn:hover {{ background-color: #2980b9; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="error">❌ Something went wrong</h1>
+                <p>An error occurred while verifying your email. Please try again later.</p>
+                <a href="{base_url}" class="btn">Go to Home</a>
+            </div>
+        </body>
+        </html>
+        """
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Handle password reset page from email link"""
+    from datetime import datetime
+    
+    # Get base URL for API calls
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    
+    try:
+        # Find user by reset token
+        result = await db.execute(
+            select(models.User).where(
+                and_(
+                    models.User.password_reset_token == token,
+                    models.User.password_reset_expires > datetime.utcnow()
+                )
+            )
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            # Return error page
+            return f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Reset Failed - Medi-tour</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                    .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+                    .error {{ color: #e74c3c; }}
+                    .btn {{ display: inline-block; padding: 12px 24px; background-color: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                    .btn:hover {{ background-color: #2980b9; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="error">❌ Reset Link Expired</h1>
+                    <p>The password reset token is invalid or has expired.</p>
+                    <p>Please request a new password reset email.</p>
+                    <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                </div>
+            </body>
+            </html>
+            """
+        
+        # Return password reset form
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Reset Password - Medi-tour</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .title {{ color: #2c3e50; text-align: center; margin-bottom: 30px; }}
+                .form-group {{ margin-bottom: 20px; }}
+                .form-group label {{ display: block; margin-bottom: 5px; color: #34495e; font-weight: bold; }}
+                .form-group input {{ width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box; }}
+                .btn {{ width: 100%; padding: 12px; background-color: #e74c3c; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 10px; }}
+                .btn:hover {{ background-color: #c0392b; }}
+                .btn:disabled {{ background-color: #95a5a6; cursor: not-allowed; }}
+                .message {{ padding: 10px; border-radius: 5px; margin-bottom: 20px; text-align: center; }}
+                .success {{ background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
+                .error {{ background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }}
+                .email {{ color: #7f8c8d; font-style: italic; text-align: center; margin-bottom: 20px; }}
+                .back-link {{ text-align: center; margin-top: 20px; }}
+                .back-link a {{ color: #3498db; text-decoration: none; }}
+                .back-link a:hover {{ text-decoration: underline; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="title">🔐 Reset Your Password</h1>
+                <p class="email">Resetting password for: {user.email}</p>
+                
+                <div id="message" class="message" style="display: none;"></div>
+                
+                <form id="resetForm">
+                    <div class="form-group">
+                        <label for="password">New Password:</label>
+                        <input type="password" id="password" name="password" required minlength="6" placeholder="Enter your new password">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password:</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6" placeholder="Confirm your new password">
+                    </div>
+                    
+                    <button type="submit" class="btn" id="submitBtn">Reset Password</button>
+                </form>
+                
+                <div class="back-link">
+                    <a href="http://165.22.223.163:8090/login">← Back to Login</a>
+                </div>
+            </div>
+            
+            <script>
+                document.getElementById('resetForm').addEventListener('submit', async function(e) {{
+                    e.preventDefault();
+                    
+                    const password = document.getElementById('password').value;
+                    const confirmPassword = document.getElementById('confirmPassword').value;
+                    const messageDiv = document.getElementById('message');
+                    const submitBtn = document.getElementById('submitBtn');
+                    
+                    // Clear previous messages
+                    messageDiv.style.display = 'none';
+                    
+                    // Validate passwords match
+                    if (password !== confirmPassword) {{
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = 'Passwords do not match!';
+                        messageDiv.style.display = 'block';
+                        return;
+                    }}
+                    
+                    // Validate password length
+                    if (password.length < 6) {{
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = 'Password must be at least 6 characters long!';
+                        messageDiv.style.display = 'block';
+                        return;
+                    }}
+                    
+                    // Disable submit button
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Resetting...';
+                    
+                    try {{
+                        const response = await fetch('{base_url}/api/v1/auth/reset-password', {{
+                            method: 'POST',
+                            headers: {{
+                                'Content-Type': 'application/json',
+                            }},
+                            body: JSON.stringify({{
+                                token: '{token}',
+                                new_password: password
+                            }})
+                        }});
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {{
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = 'Password reset successfully! Redirecting to login...';
+                            messageDiv.style.display = 'block';
+                            
+                            // Redirect to login after 2 seconds
+                            setTimeout(() => {{
+                                window.location.href = 'http://165.22.223.163:8090/login';
+                            }}, 2000);
+                        }} else {{
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.detail || 'Failed to reset password. Please try again.';
+                            messageDiv.style.display = 'block';
+                        }}
+                    }} catch (error) {{
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = 'Network error. Please check your connection and try again.';
+                        messageDiv.style.display = 'block';
+                    }} finally {{
+                        // Re-enable submit button
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Reset Password';
+                    }}
+                }});
+            </script>
+        </body>
+        </html>
+        """
+        
+    except Exception as e:
+        # Return generic error page
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Error - Medi-tour</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+                .error {{ color: #e74c3c; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background-color: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .btn:hover {{ background-color: #2980b9; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="error">❌ Something went wrong</h1>
+                <p>An error occurred while processing your password reset. Please try again later.</p>
+                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+            </div>
+        </body>
+        </html>
+        """
+
+@router.get("/auth/me", response_model=schemas.UserResponse)
+async def get_current_user_info(
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get current user information"""
+    from app.auth_utils import user_to_dict
+    return user_to_dict(current_user)
 
 
 # Treatment endpoints
