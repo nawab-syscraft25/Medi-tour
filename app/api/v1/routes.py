@@ -715,10 +715,146 @@ async def global_search(
     treatments = treatments_result.scalars().all()
     hospitals = hospitals_result.scalars().all()
     
-    # Convert to dictionaries (simplified version without loading images/FAQs for performance)
-    doctor_results = [doctor_to_dict(doctor) for doctor in doctors]
-    treatment_results = [treatment_to_dict(treatment) for treatment in treatments]
-    hospital_results = [hospital_to_dict(hospital) for hospital in hospitals]
+    # Load images and FAQs for doctors
+    doctor_results = []
+    for doctor in doctors:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == doctor.id,
+                    models.Image.owner_type == "doctor"
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == doctor.id,
+                    models.FAQ.owner_type == "doctor",
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
+        doctor_dict = doctor_to_dict(doctor)
+        doctor_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        doctor_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active
+            } for faq in faqs
+        ]
+        doctor_results.append(doctor_dict)
+    
+    # Load images and FAQs for treatments
+    treatment_results = []
+    for treatment in treatments:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == treatment.id,
+                    models.Image.owner_type == "treatment"
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == treatment.id,
+                    models.FAQ.owner_type == "treatment",
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
+        treatment_dict = treatment_to_dict(treatment)
+        treatment_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        treatment_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active
+            } for faq in faqs
+        ]
+        treatment_results.append(treatment_dict)
+    
+    # Load images and FAQs for hospitals
+    hospital_results = []
+    for hospital in hospitals:
+        # Load images within session
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == hospital.id,
+                    models.Image.owner_type == "hospital"
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == hospital.id,
+                    models.FAQ.owner_type == "hospital",
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
+        hospital_dict = hospital_to_dict(hospital)
+        hospital_dict['images'] = [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+        hospital_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active
+            } for faq in faqs
+        ]
+        hospital_results.append(hospital_dict)
     
     return {
         "query": query,
