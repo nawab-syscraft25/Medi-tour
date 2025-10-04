@@ -50,6 +50,11 @@
                                 <button type="button" class="btn btn-outline-success" onclick="showNewTypeModal()" title="Add New Type">
                                     <i class="fas fa-plus"></i>
                                 </button>
+                                {% if treatment %}
+                                <button type="button" class="btn btn-outline-primary" onclick="showRenameTypeModal()" title="Rename Selected Type">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -428,6 +433,41 @@
     </div>
 </div>
 
+<!-- Rename Treatment Type Modal -->
+<div class="modal fade" id="renameTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rename Treatment Type</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="renameTypeForm">
+                    <div class="mb-3">
+                        <label for="currentTypeName" class="form-label">Current Treatment Type</label>
+                        <input type="text" class="form-control" id="currentTypeName" readonly
+                               value="{{ treatment.treatment_type if treatment else '' }}">
+                        <div class="form-text">Current selected treatment type</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="renameTypeName" class="form-label">New Treatment Type Name</label>
+                        <input type="text" class="form-control" id="renameTypeName" 
+                               value="{{ treatment.treatment_type if treatment else '' }}"
+                               placeholder="Enter new treatment type name">
+                        <div class="form-text">Enter the new name for this treatment type</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="renameTreatmentType()">
+                    <i class="fas fa-save"></i> Rename Type
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Global variables
 const TREATMENT_ID = {% if treatment and treatment.id %}{{ treatment.id }}{% else %}null{% endif %};
@@ -616,6 +656,96 @@ function showSuccessMessage(message) {
                 successMsg.remove();
             }
         }, 5000);
+    }
+}
+
+// Treatment Type Rename Functions
+function showRenameTypeModal() {
+    const treatmentTypeSelect = document.getElementById('treatment_type');
+    const currentType = treatmentTypeSelect.value;
+    const currentTypeText = treatmentTypeSelect.options[treatmentTypeSelect.selectedIndex].text;
+    
+    if (!currentType) {
+        alert('Please select a treatment type first.');
+        return;
+    }
+    
+    document.getElementById('currentTypeName').value = currentTypeText;
+    document.getElementById('renameTypeName').value = ''; // Clear the input field
+    document.getElementById('renameTypeName').placeholder = `Enter new name for "${currentTypeText}"`;
+    new bootstrap.Modal(document.getElementById('renameTypeModal')).show();
+    
+    // Focus on the input field
+    setTimeout(() => {
+        document.getElementById('renameTypeName').focus();
+    }, 500);
+}
+
+function renameTreatmentType() {
+    console.log('renameTreatmentType called');
+    
+    const newTypeName = document.getElementById('renameTypeName').value.trim();
+    const treatmentTypeSelect = document.getElementById('treatment_type');
+    const currentType = treatmentTypeSelect.value;
+    const currentTypeText = treatmentTypeSelect.options[treatmentTypeSelect.selectedIndex].text;
+    
+    console.log('Current type:', currentTypeText);
+    console.log('New type name:', newTypeName);
+    
+    // If empty input, just close modal without doing anything
+    if (!newTypeName) {
+        console.log('Empty input, closing modal');
+        bootstrap.Modal.getInstance(document.getElementById('renameTypeModal')).hide();
+        return;
+    }
+    
+    if (newTypeName === currentTypeText) {
+        alert(`The new type name "${newTypeName}" is the same as the current type name. Please enter a different name.`);
+        return;
+    }
+    
+    // Check if the new type name already exists in the dropdown
+    const existingOptions = Array.from(treatmentTypeSelect.options).map(option => option.text.toLowerCase());
+    if (existingOptions.includes(newTypeName.toLowerCase())) {
+        alert('This treatment type name already exists in the list.');
+        return;
+    }
+    
+    console.log('Updating option text and value');
+    
+    // Update the selected option text
+    const selectedOption = treatmentTypeSelect.options[treatmentTypeSelect.selectedIndex];
+    selectedOption.text = newTypeName;
+    selectedOption.value = newTypeName;
+    
+    console.log('Updated option:', selectedOption.text, selectedOption.value);
+    
+    // Close modal
+    bootstrap.Modal.getInstance(document.getElementById('renameTypeModal')).hide();
+    
+    // Show success message
+    showRenameSuccessMessage(`Treatment type updated from "${currentTypeText}" to "${newTypeName}". Remember to save the form to persist changes.`);
+}
+
+function showRenameSuccessMessage(message) {
+    const successMsg = document.createElement('div');
+    successMsg.className = 'alert alert-info alert-dismissible fade show mt-2';
+    successMsg.innerHTML = `
+        <strong>Info!</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insert at the top of the form
+    const formContainer = document.querySelector('.card-body');
+    if (formContainer) {
+        formContainer.insertBefore(successMsg, formContainer.firstChild);
+        
+        // Auto dismiss after 8 seconds
+        setTimeout(() => {
+            if (successMsg && successMsg.parentNode) {
+                successMsg.remove();
+            }
+        }, 8000);
     }
 }
 

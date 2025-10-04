@@ -403,7 +403,9 @@ async def admin_hospital_edit(
         "hospital_images": hospital_images,
         "hospital_faqs": hospital_faqs,
         "action": "Update"
-    })# Doctor Management
+    })
+
+# Doctor Management
 @router.get("/admin/doctors", response_class=HTMLResponse)
 async def admin_doctors(
     request: Request,
@@ -1696,8 +1698,16 @@ async def admin_hospital_update(
     features: str = Form("") ,
     facilities: str = Form("") ,
     is_featured: bool = Form(False),
-    faq_questions: List[str] = Form([]),
-    faq_answers: List[str] = Form([]),
+    faq1_question: str = Form(""),
+    faq1_answer: str = Form(""),
+    faq2_question: str = Form(""),
+    faq2_answer: str = Form(""),
+    faq3_question: str = Form(""),
+    faq3_answer: str = Form(""),
+    faq4_question: str = Form(""),
+    faq4_answer: str = Form(""),
+    faq5_question: str = Form(""),
+    faq5_answer: str = Form(""),
     images: List[UploadFile] = File(default=[]),
     delete_image_id: str = Form(None),
     update_image_order: str = Form(None),
@@ -1819,6 +1829,25 @@ async def admin_hospital_update(
         hospital.features = update_data.features
         hospital.facilities = update_data.facilities
         hospital.is_featured = is_featured
+        
+        # Update FAQ fields
+        print(f"DEBUG HOSPITAL: Updating FAQ fields for hospital {hospital_id}")
+        print(f"  - FAQ 1: Q='{faq1_question}' A='{faq1_answer}'")
+        print(f"  - FAQ 2: Q='{faq2_question}' A='{faq2_answer}'")
+        print(f"  - FAQ 3: Q='{faq3_question}' A='{faq3_answer}'")
+        print(f"  - FAQ 4: Q='{faq4_question}' A='{faq4_answer}'")
+        print(f"  - FAQ 5: Q='{faq5_question}' A='{faq5_answer}'")
+        
+        hospital.faq1_question = faq1_question.strip() if faq1_question else None
+        hospital.faq1_answer = faq1_answer.strip() if faq1_answer else None
+        hospital.faq2_question = faq2_question.strip() if faq2_question else None
+        hospital.faq2_answer = faq2_answer.strip() if faq2_answer else None
+        hospital.faq3_question = faq3_question.strip() if faq3_question else None
+        hospital.faq3_answer = faq3_answer.strip() if faq3_answer else None
+        hospital.faq4_question = faq4_question.strip() if faq4_question else None
+        hospital.faq4_answer = faq4_answer.strip() if faq4_answer else None
+        hospital.faq5_question = faq5_question.strip() if faq5_question else None
+        hospital.faq5_answer = faq5_answer.strip() if faq5_answer else None
 
         # Handle new image uploads
         existing_images_result = await db.execute(

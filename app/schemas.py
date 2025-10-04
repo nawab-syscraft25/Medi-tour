@@ -105,11 +105,18 @@ class HospitalBase(BaseModel):
     name: str
     description: Optional[str] = None
     location: Optional[str] = None
+    address: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    established_year: Optional[int] = None
+    bed_count: Optional[int] = None
+    specializations: Optional[str] = None
     rating: Optional[float] = None
     features: Optional[str] = None  # comma-separated
     facilities: Optional[str] = None  # comma-separated
-    is_featured: bool = False
+    is_featured: Optional[bool] = False
+    is_active: Optional[bool] = True
     
     @validator('rating', pre=True, always=True)
     def validate_rating(cls, v):
@@ -160,6 +167,17 @@ class HospitalResponse(HospitalBase, BaseSchema):
     created_at: datetime
     images: List[ImageResponse] = []
     faqs: List[FAQResponse] = []
+    # Direct FAQ fields from model
+    faq1_question: Optional[str] = None
+    faq1_answer: Optional[str] = None
+    faq2_question: Optional[str] = None
+    faq2_answer: Optional[str] = None
+    faq3_question: Optional[str] = None
+    faq3_answer: Optional[str] = None
+    faq4_question: Optional[str] = None
+    faq4_answer: Optional[str] = None
+    faq5_question: Optional[str] = None
+    faq5_answer: Optional[str] = None
     
     @property
     def features_list(self) -> List[str]:
@@ -321,6 +339,17 @@ class DoctorResponse(BaseSchema):
     created_at: datetime
     images: List[ImageResponse] = []
     faqs: List[FAQResponse] = []
+    # Direct FAQ fields from model
+    faq1_question: Optional[str] = None
+    faq1_answer: Optional[str] = None
+    faq2_question: Optional[str] = None
+    faq2_answer: Optional[str] = None
+    faq3_question: Optional[str] = None
+    faq3_answer: Optional[str] = None
+    faq4_question: Optional[str] = None
+    faq4_answer: Optional[str] = None
+    faq5_question: Optional[str] = None
+    faq5_answer: Optional[str] = None
     
     @property
     def skills_list(self) -> List[str]:
@@ -440,6 +469,17 @@ class TreatmentResponse(BaseSchema):
     created_at: datetime
     images: List[ImageResponse] = []
     faqs: List[FAQResponse] = []
+    # Direct FAQ fields from model
+    faq1_question: Optional[str] = None
+    faq1_answer: Optional[str] = None
+    faq2_question: Optional[str] = None
+    faq2_answer: Optional[str] = None
+    faq3_question: Optional[str] = None
+    faq3_answer: Optional[str] = None
+    faq4_question: Optional[str] = None
+    faq4_answer: Optional[str] = None
+    faq5_question: Optional[str] = None
+    faq5_answer: Optional[str] = None
 
 
 # Package Booking schemas

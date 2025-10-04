@@ -14,12 +14,32 @@ def hospital_to_dict(hospital: models.Hospital) -> dict:
         "name": hospital.name,
         "description": hospital.description,
         "location": hospital.location,
+        "address": hospital.address,
         "phone": hospital.phone,
+        "email": hospital.email,
+        "website": hospital.website,
+        "established_year": hospital.established_year,
+        "bed_count": hospital.bed_count,
+        "specializations": hospital.specializations,
+        "rating": hospital.rating,
         "features": hospital.features,
         "facilities": hospital.facilities,
-        "rating": hospital.rating,
+        "is_featured": hospital.is_featured if hospital.is_featured is not None else False,
+        "is_active": hospital.is_active if hospital.is_active is not None else True,
         "created_at": hospital.created_at,
-        "images": []  # Will be populated separately
+        "images": [],  # Will be populated separately
+        "faqs": [],    # Will be populated separately
+        # Direct FAQ fields from model (all 5 FAQ pairs)
+        "faq1_question": hospital.faq1_question,
+        "faq1_answer": hospital.faq1_answer,
+        "faq2_question": hospital.faq2_question,
+        "faq2_answer": hospital.faq2_answer,
+        "faq3_question": hospital.faq3_question,
+        "faq3_answer": hospital.faq3_answer,
+        "faq4_question": hospital.faq4_question,
+        "faq4_answer": hospital.faq4_answer,
+        "faq5_question": hospital.faq5_question,
+        "faq5_answer": hospital.faq5_answer
     }
 
 
@@ -43,8 +63,21 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "qualifications": doctor.qualifications,
         "highlights": doctor.highlights,
         "awards": doctor.awards,
+        "location": doctor.location,
         "created_at": doctor.created_at,
-        "images": []  # Will be populated separately
+        "images": [],  # Will be populated separately
+        "faqs": [],    # Will be populated separately
+        # Direct FAQ fields from model (all 5 FAQ pairs)
+        "faq1_question": doctor.faq1_question,
+        "faq1_answer": doctor.faq1_answer,
+        "faq2_question": doctor.faq2_question,
+        "faq2_answer": doctor.faq2_answer,
+        "faq3_question": doctor.faq3_question,
+        "faq3_answer": doctor.faq3_answer,
+        "faq4_question": doctor.faq4_question,
+        "faq4_answer": doctor.faq4_answer,
+        "faq5_question": doctor.faq5_question,
+        "faq5_answer": doctor.faq5_answer
     }
 
 
@@ -61,11 +94,24 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "price_exact": treatment.price_exact,
         "hospital_id": treatment.hospital_id,
         "other_hospital_name": treatment.other_hospital_name,
+        "doctor_id": treatment.doctor_id,
         "other_doctor_name": treatment.other_doctor_name,
         "location": treatment.location,
         "rating": treatment.rating,
         "created_at": treatment.created_at,
-        "images": []  # Will be populated separately
+        "images": [],  # Will be populated separately
+        "faqs": [],    # Will be populated separately
+        # Direct FAQ fields from model (all 5 FAQ pairs)
+        "faq1_question": treatment.faq1_question,
+        "faq1_answer": treatment.faq1_answer,
+        "faq2_question": treatment.faq2_question,
+        "faq2_answer": treatment.faq2_answer,
+        "faq3_question": treatment.faq3_question,
+        "faq3_answer": treatment.faq3_answer,
+        "faq4_question": treatment.faq4_question,
+        "faq4_answer": treatment.faq4_answer,
+        "faq5_question": treatment.faq5_question,
+        "faq5_answer": treatment.faq5_answer
     }
 
 
@@ -209,7 +255,7 @@ async def get_hospitals(
     result = await db.execute(query)
     hospitals = result.scalars().all()
     
-    # Load images for each hospital within the session
+    # Load images and FAQs for each hospital within the session
     hospital_dicts = []
     for hospital in hospitals:
         # Load images within session
@@ -223,6 +269,18 @@ async def get_hospitals(
         )
         images = images_result.scalars().all()
         
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == hospital.id,
+                    models.FAQ.owner_type == 'hospital',
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
         hospital_dict = hospital_to_dict(hospital)
         hospital_dict['images'] = [
             {
@@ -232,6 +290,19 @@ async def get_hospitals(
                 "position": img.position,
                 "uploaded_at": img.uploaded_at
             } for img in images
+        ]
+        hospital_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "owner_type": faq.owner_type,
+                "owner_id": faq.owner_id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active,
+                "created_at": faq.created_at,
+                "updated_at": faq.updated_at
+            } for faq in faqs
         ]
         hospital_dicts.append(hospital_dict)
     
@@ -387,7 +458,7 @@ async def get_doctors(
     result = await db.execute(query)
     doctors = result.scalars().all()
     
-    # Load images for each doctor within the session
+    # Load images and FAQs for each doctor within the session
     doctor_dicts = []
     for doctor in doctors:
         # Load images within session
@@ -401,6 +472,18 @@ async def get_doctors(
         )
         images = images_result.scalars().all()
         
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == doctor.id,
+                    models.FAQ.owner_type == 'doctor',
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
         doctor_dict = doctor_to_dict(doctor)
         doctor_dict['images'] = [
             {
@@ -411,9 +494,68 @@ async def get_doctors(
                 "uploaded_at": img.uploaded_at
             } for img in images
         ]
+        doctor_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "owner_type": faq.owner_type,
+                "owner_id": faq.owner_id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active,
+                "created_at": faq.created_at,
+                "updated_at": faq.updated_at
+            } for faq in faqs
+        ]
         doctor_dicts.append(doctor_dict)
     
     return doctor_dicts
+
+
+@router.get("/doctors/{doctor_id}/debug")
+async def debug_doctor_faqs(doctor_id: int, db: AsyncSession = Depends(get_db)):
+    """Debug endpoint to check doctor FAQ data"""
+    result = await db.execute(select(models.Doctor).where(models.Doctor.id == doctor_id))
+    doctor = result.scalar_one_or_none()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    
+    # Check FAQ table data
+    faqs_result = await db.execute(
+        select(models.FAQ).where(
+            and_(
+                models.FAQ.owner_id == doctor.id,
+                models.FAQ.owner_type == 'doctor'
+            )
+        )
+    )
+    faq_table_data = faqs_result.scalars().all()
+    
+    return {
+        "doctor_id": doctor.id,
+        "doctor_name": doctor.name,
+        "faq_table_count": len(faq_table_data),
+        "faq_table_data": [
+            {
+                "id": faq.id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "is_active": faq.is_active
+            } for faq in faq_table_data
+        ],
+        "direct_faq_fields": {
+            "faq1_question": doctor.faq1_question,
+            "faq1_answer": doctor.faq1_answer,
+            "faq2_question": doctor.faq2_question,
+            "faq2_answer": doctor.faq2_answer,
+            "faq3_question": doctor.faq3_question,
+            "faq3_answer": doctor.faq3_answer,
+            "faq4_question": doctor.faq4_question,
+            "faq4_answer": doctor.faq4_answer,
+            "faq5_question": doctor.faq5_question,
+            "faq5_answer": doctor.faq5_answer
+        }
+    }
 
 
 @router.get("/doctors/{doctor_id}", response_model=schemas.DoctorResponse)
@@ -575,7 +717,7 @@ async def get_treatments(
     result = await db.execute(query)
     treatments = result.scalars().all()
     
-    # Load images for each treatment within the session
+    # Load images and FAQs for each treatment within the session
     treatment_dicts = []
     for treatment in treatments:
         # Load images within session
@@ -589,6 +731,18 @@ async def get_treatments(
         )
         images = images_result.scalars().all()
         
+        # Load FAQs within session
+        faqs_result = await db.execute(
+            select(models.FAQ).where(
+                and_(
+                    models.FAQ.owner_id == treatment.id,
+                    models.FAQ.owner_type == 'treatment',
+                    models.FAQ.is_active == True
+                )
+            ).order_by(models.FAQ.position)
+        )
+        faqs = faqs_result.scalars().all()
+        
         treatment_dict = treatment_to_dict(treatment)
         treatment_dict['images'] = [
             {
@@ -598,6 +752,19 @@ async def get_treatments(
                 "position": img.position,
                 "uploaded_at": img.uploaded_at
             } for img in images
+        ]
+        treatment_dict['faqs'] = [
+            {
+                "id": faq.id,
+                "owner_type": faq.owner_type,
+                "owner_id": faq.owner_id,
+                "question": faq.question,
+                "answer": faq.answer,
+                "position": faq.position,
+                "is_active": faq.is_active,
+                "created_at": faq.created_at,
+                "updated_at": faq.updated_at
+            } for faq in faqs
         ]
         treatment_dicts.append(treatment_dict)
     
