@@ -92,7 +92,7 @@ def send_verification_email(to_email: str, token: str, user_name: str, base_url:
     
     # Use current domain or fallback to localhost
     if not base_url:
-        base_url = "http://165.22.223.163:8000"
+        base_url = "http://165.22.223.163:8001"
     
     verification_url = f"{base_url}/api/v1/verify-email?token={token}"
     
