@@ -20,7 +20,6 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Position</th>
                         <th>Name</th>
                         <th>Title</th>
                         <th>Image</th>
@@ -33,13 +32,7 @@
                     {% for banner in banners %}
                     <tr>
                         <td>
-                            <span class="badge bg-secondary">{{ banner.position }}</span>
-                        </td>
-                        <td>
                             <strong>{{ banner.name }}</strong>
-                            {% if banner.subtitle %}
-                            <br><small class="text-muted">{{ banner.subtitle[:50] }}{% if banner.subtitle|length > 50 %}...{% endif %}</small>
-                            {% endif %}
                         </td>
                         <td>
                             {% if banner.title %}

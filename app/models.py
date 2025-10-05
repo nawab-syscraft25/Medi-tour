@@ -161,6 +161,7 @@ class Treatment(Base):
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="SET NULL"), nullable=True)
     other_doctor_name = Column(String(300), nullable=True)
     location = Column(String(500), nullable=True)
+    features = Column(Text, nullable=True)  # comma-separated treatment features
     # Simple FAQ fields
     faq1_question = Column(Text, nullable=True)
     faq1_answer = Column(Text, nullable=True)

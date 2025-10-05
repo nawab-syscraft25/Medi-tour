@@ -32,38 +32,15 @@
                            placeholder="e.g., Apollo Hospitals, Max Healthcare">
                     <div class="form-text">Full name of the partner hospital</div>
                 </div>
-                <div class="col-md-4">
-                    <label for="position" class="form-label">Display Position</label>
-                    <input type="number" class="form-control" id="position" name="position" min="0"
-                           value="{{ partner.position if partner else 0 }}">
-                    <div class="form-text">Lower numbers appear first</div>
-                </div>
             </div>
+            
+            <!-- Hidden fields for position and description -->
+            <input type="hidden" name="position" value="{{ partner.position if partner else 0 }}">
+            <input type="hidden" name="description" value="{{ partner.description if partner and partner.description else '' }}">
 
-            <div class="mb-3">
-                <label for="description" class="form-label">Description</label>
-                <textarea class="form-control" id="description" name="description" rows="3"
-                          placeholder="Brief description of the hospital and its specialties">{{ partner.description if partner and partner.description else '' }}</textarea>
-                <div class="form-text">Brief overview of the hospital's services and reputation</div>
-            </div>
-
-            <!-- Location and Contact -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="location" class="form-label">Location</label>
-                    <input type="text" class="form-control" id="location" name="location"
-                           value="{{ partner.location if partner and partner.location else '' }}"
-                           placeholder="City, State, Country">
-                    <div class="form-text">Hospital's primary location</div>
-                </div>
-                <div class="col-md-6">
-                    <label for="website_url" class="form-label">Website URL</label>
-                    <input type="url" class="form-control" id="website_url" name="website_url"
-                           value="{{ partner.website_url if partner and partner.website_url else '' }}"
-                           placeholder="https://hospital-website.com">
-                    <div class="form-text">Official hospital website</div>
-                </div>
-            </div>
+            <!-- Hidden fields for location and website_url -->
+            <input type="hidden" name="location" value="{{ partner.location if partner and partner.location else '' }}">
+            <input type="hidden" name="website_url" value="{{ partner.website_url if partner and partner.website_url else '' }}">
 
             <!-- Logo Upload -->
             <div class="mb-3">

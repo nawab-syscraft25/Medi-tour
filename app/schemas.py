@@ -183,8 +183,14 @@ class HospitalResponse(HospitalBase, BaseSchema):
     @property
     def features_list(self) -> List[str]:
         return [f.strip() for f in (self.features or "").split(",") if f.strip()]
+    
+    @property
     def facilities_list(self) -> List[str]:
         return [f.strip() for f in (self.facilities or "").split(",") if f.strip()]
+    
+    @property
+    def specializations_list(self) -> List[str]:
+        return [s.strip() for s in (self.specializations or "").split(",") if s.strip()]
 
 
 # Doctor schemas
@@ -207,6 +213,7 @@ class DoctorBase(BaseModel):
     highlights: Optional[str] = None
     awards: Optional[str] = None
     is_featured: bool = False
+    is_active: bool = True
     
     @validator('experience_years', pre=True, always=True)
     def validate_experience_years(cls, v):
@@ -274,6 +281,7 @@ class DoctorUpdate(BaseModel):
     highlights: Optional[str] = None
     awards: Optional[str] = None
     is_featured: Optional[bool] = None
+    is_active: Optional[bool] = None
     
     @validator('experience_years', pre=True, always=True)
     def validate_experience_years(cls, v):
@@ -337,6 +345,8 @@ class DoctorResponse(BaseSchema):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    is_featured: bool = False
+    is_active: bool = True
     created_at: datetime
     images: List[ImageResponse] = []
     faqs: List[FAQResponse] = []
@@ -372,6 +382,7 @@ class TreatmentBase(BaseModel):
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    features: Optional[str] = None  # comma-separated features
     is_featured: bool = False
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
@@ -421,6 +432,7 @@ class TreatmentUpdate(BaseModel):
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    features: Optional[str] = None
     is_featured: Optional[bool] = None
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
@@ -467,6 +479,8 @@ class TreatmentResponse(BaseSchema):
     doctor_id: Optional[int] = None
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
+    features: Optional[str] = None
+    is_featured: bool = False
     created_at: datetime
     images: List[ImageResponse] = []
     faqs: List[FAQResponse] = []
@@ -481,6 +495,10 @@ class TreatmentResponse(BaseSchema):
     faq4_answer: Optional[str] = None
     faq5_question: Optional[str] = None
     faq5_answer: Optional[str] = None
+    
+    @property
+    def features_list(self) -> List[str]:
+        return [f.strip() for f in (self.features or "").split(",") if f.strip()]
 
 
 # Package Booking schemas
@@ -634,6 +652,7 @@ class ContactUsResponse(ContactUsBase, BaseSchema):
 
 # Offer schemas (Attractions / Discount Packages)
 class OfferBase(BaseModel):
+    name: str
     description: str
     treatment_type: Optional[str] = None
     location: Optional[str] = None
@@ -845,9 +864,129 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+# Banner schemas
+class BannerBase(BaseModel):
+    name: str
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    link_url: Optional[str] = None
+    button_text: Optional[str] = None
+    position: int = 0
+    is_active: bool = True
+
+
+class BannerCreate(BannerBase):
+    pass
+
+
+class BannerUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    link_url: Optional[str] = None
+    button_text: Optional[str] = None
+    position: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class BannerResponse(BannerBase, BaseSchema):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+# Partner Hospital schemas
+class PartnerHospitalBase(BaseModel):
+    name: str
+    logo_url: Optional[str] = None
+    website_url: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    position: int = 0
+    is_active: bool = True
+
+
+class PartnerHospitalCreate(PartnerHospitalBase):
+    pass
+
+
+class PartnerHospitalUpdate(BaseModel):
+    name: Optional[str] = None
+    logo_url: Optional[str] = None
+    website_url: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    position: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class PartnerHospitalResponse(PartnerHospitalBase, BaseSchema):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+# Patient Story schemas
+class PatientStoryBase(BaseModel):
+    patient_name: str
+    description: str
+    rating: int = Field(..., ge=1, le=5)
+    profile_photo: Optional[str] = None
+    treatment_type: Optional[str] = None
+    hospital_name: Optional[str] = None
+    location: Optional[str] = None
+    date_of_treatment: Optional[datetime] = None
+    position: int = 0
+    is_featured: bool = False
+    is_active: bool = True
+    
+    @validator('rating')
+    def validate_rating(cls, v):
+        if v < 1 or v > 5:
+            raise ValueError('Rating must be between 1 and 5')
+        return v
+
+
+class PatientStoryCreate(PatientStoryBase):
+    pass
+
+
+class PatientStoryUpdate(BaseModel):
+    patient_name: Optional[str] = None
+    description: Optional[str] = None
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    profile_photo: Optional[str] = None
+    treatment_type: Optional[str] = None
+    hospital_name: Optional[str] = None
+    location: Optional[str] = None
+    date_of_treatment: Optional[datetime] = None
+    position: Optional[int] = None
+    is_featured: Optional[bool] = None
+    is_active: Optional[bool] = None
+    
+    @validator('rating')
+    def validate_rating(cls, v):
+        if v is not None and (v < 1 or v > 5):
+            raise ValueError('Rating must be between 1 and 5')
+        return v
+
+
+class PatientStoryResponse(PatientStoryBase, BaseSchema):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+
 # Update forward references
 DoctorResponse.model_rebuild()
 HospitalResponse.model_rebuild()
 TreatmentResponse.model_rebuild()
 AppointmentResponse.model_rebuild()
 BlogResponse.model_rebuild()
+BannerResponse.model_rebuild()
+PartnerHospitalResponse.model_rebuild()
+PatientStoryResponse.model_rebuild()

@@ -2264,6 +2264,7 @@ async def admin_treatment_create(
     long_description: str = Form(""),
     treatment_type: str = Form(...),
     location: str = Form(...),
+    features: str = Form(""),
     price_min: Optional[float] = Form(None),
     price_max: Optional[float] = Form(None),
     price_exact: Optional[float] = Form(None),
@@ -2292,6 +2293,7 @@ async def admin_treatment_create(
             long_description=long_description or None,
             treatment_type=treatment_type,
             location=location,
+            features=parse_comma_separated_string(features) if features else None,
             price_min=price_min,
             price_max=price_max,
             price_exact=price_exact,
@@ -2364,6 +2366,7 @@ async def admin_treatment_update(
     long_description: str = Form(""),
     treatment_type: str = Form(...),
     location: str = Form(...),
+    features: str = Form(""),
     price_min: str = Form(""),
     price_max: str = Form(""),
     price_exact: str = Form(""),
@@ -2528,6 +2531,7 @@ async def admin_treatment_update(
             long_description=long_description or None,
             treatment_type=treatment_type,
             location=location,
+            features=parse_comma_separated_string(features) if features else None,
             price_min=price_min,
             price_max=price_max,
             price_exact=price_exact,
@@ -2544,6 +2548,7 @@ async def admin_treatment_update(
         treatment.long_description = update_data.long_description
         treatment.treatment_type = update_data.treatment_type
         treatment.location = update_data.location
+        treatment.features = update_data.features
         treatment.price_min = update_data.price_min
         treatment.price_max = update_data.price_max
         treatment.price_exact = update_data.price_exact

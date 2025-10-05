@@ -56,21 +56,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <div class="h4 mb-0">{{ contacts|selectattr("admin_response", "defined")|list|length or 0 }}</div>
-                        <div class="small">Replied</div>
-                    </div>
-                    <div class="fa-2x">
-                        <i class="fas fa-reply"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
     <div class="col-md-3">
         <div class="card bg-secondary text-white">
             <div class="card-body">
@@ -102,7 +88,6 @@
                             <option value="">All Status</option>
                             <option value="new">New</option>
                             <option value="read">Read</option>
-                            <option value="replied">Replied</option>
                         </select>
                     </div>
                     <div class="col-auto">
@@ -169,8 +154,6 @@
                         <td>
                             {% if not contact.is_read %}
                                 <span class="badge bg-warning">New</span>
-                            {% elif contact.admin_response %}
-                                <span class="badge bg-success">Replied</span>
                             {% else %}
                                 <span class="badge bg-info">Read</span>
                             {% endif %}
@@ -187,12 +170,6 @@
                                         onclick="viewContactDetails({{ contact.id }})">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button type="button" 
-                                        class="btn btn-outline-success" 
-                                        title="Reply"
-                                        onclick="replyToContact({{ contact.id }})">
-                                    <i class="fas fa-reply"></i>
-                                </button>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button type="button" 
                                             class="btn btn-outline-secondary dropdown-toggle" 
@@ -206,9 +183,6 @@
                                             <i class="fas fa-eye text-info me-2"></i>Mark as Read
                                         </a></li>
                                         {% endif %}
-                                        <li><a class="dropdown-item" href="#" onclick="replyToContact({{ contact.id }})">
-                                            <i class="fas fa-reply text-success me-2"></i>Reply
-                                        </a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><a class="dropdown-item text-danger" href="#" onclick="deleteContact({{ contact.id }})">
                                             <i class="fas fa-trash me-2"></i>Delete
@@ -285,40 +259,12 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="replyBtn">Reply</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Reply Modal -->
-<div class="modal fade" id="replyModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Reply to Contact</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="replyContactInfo" class="mb-3">
-                    <!-- Contact info loaded dynamically -->
-                </div>
-                <form id="replyForm">
-                    <input type="hidden" id="replyContactId" name="contact_id" />
-                    <div class="mb-3">
-                        <label for="replyText" class="form-label">Your Reply</label>
-                        <textarea class="form-control" id="replyText" name="response" rows="5" required 
-                                  placeholder="Type your reply here..."></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="sendReply()">Send Reply</button>
-            </div>
-        </div>
-    </div>
-</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -399,65 +345,7 @@ function viewContactDetails(contactId) {
     }, 1000);
 }
 
-// Reply to contact
-function replyToContact(contactId) {
-    // Get contact details for the reply modal
-    const row = document.querySelector(`tr [value="${contactId}"]`).closest('tr');
-    const contactName = row.querySelector('strong').textContent;
-    const contactEmail = row.querySelector('.fa-envelope').parentElement.textContent.trim();
-    const subject = row.querySelector('td:nth-child(3) strong').textContent;
-    
-    // Populate reply modal
-    document.getElementById('replyContactId').value = contactId;
-    document.getElementById('replyContactInfo').innerHTML = `
-        <div class="card bg-light">
-            <div class="card-body">
-                <h6 class="card-title">Replying to:</h6>
-                <p class="mb-1"><strong>Name:</strong> ${contactName}</p>
-                <p class="mb-1"><strong>Email:</strong> ${contactEmail}</p>
-                <p class="mb-0"><strong>Subject:</strong> ${subject}</p>
-            </div>
-        </div>
-    `;
-    
-    // Clear previous reply text
-    document.getElementById('replyText').value = '';
-    
-    // Show modal
-    new bootstrap.Modal(document.getElementById('replyModal')).show();
-}
 
-function sendReply() {
-    const contactId = document.getElementById('replyContactId').value;
-    const responseText = document.getElementById('replyText').value.trim();
-    
-    if (!responseText) {
-        alert('Please enter a reply message.');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('response', responseText);
-    
-    fetch(`/admin/contacts/${contactId}/reply`, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.message) {
-            bootstrap.Modal.getInstance(document.getElementById('replyModal')).hide();
-            alert('Reply sent successfully!');
-            location.reload();
-        } else {
-            alert('Error sending reply');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error sending reply');
-    });
-}
 
 // Mark contact as read
 function markAsRead(contactId) {

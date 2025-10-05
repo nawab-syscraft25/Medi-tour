@@ -32,13 +32,10 @@
                            placeholder="e.g., Home Page Banner, About Us Banner">
                     <div class="form-text">Internal name to identify this banner</div>
                 </div>
-                <div class="col-md-6">
-                    <label for="position" class="form-label">Display Position</label>
-                    <input type="number" class="form-control" id="position" name="position" min="0"
-                           value="{{ banner.position if banner else 0 }}">
-                    <div class="form-text">Lower numbers appear first</div>
-                </div>
             </div>
+            
+            <!-- Hidden field for position with default value -->
+            <input type="hidden" name="position" value="{{ banner.position if banner else 0 }}">
 
             <!-- Content -->
             <div class="row mb-3">
@@ -48,19 +45,11 @@
                            value="{{ banner.title if banner and banner.title else '' }}"
                            placeholder="Main heading text">
                 </div>
-                <div class="col-md-6">
-                    <label for="subtitle" class="form-label">Banner Subtitle</label>
-                    <input type="text" class="form-control" id="subtitle" name="subtitle"
-                           value="{{ banner.subtitle if banner and banner.subtitle else '' }}"
-                           placeholder="Secondary text">
-                </div>
             </div>
-
-            <div class="mb-3">
-                <label for="description" class="form-label">Description</label>
-                <textarea class="form-control" id="description" name="description" rows="3"
-                          placeholder="Detailed description or additional content">{{ banner.description if banner and banner.description else '' }}</textarea>
-            </div>
+            
+            <!-- Hidden fields for subtitle and description -->
+            <input type="hidden" name="subtitle" value="{{ banner.subtitle if banner and banner.subtitle else '' }}">
+            <input type="hidden" name="description" value="{{ banner.description if banner and banner.description else '' }}">
 
             <!-- Image Upload -->
             <div class="mb-3">
@@ -76,23 +65,9 @@
                 {% endif %}
             </div>
 
-            <!-- Call to Action -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="link_url" class="form-label">Link URL</label>
-                    <input type="url" class="form-control" id="link_url" name="link_url"
-                           value="{{ banner.link_url if banner and banner.link_url else '' }}"
-                           placeholder="https://example.com">
-                    <div class="form-text">Optional link when banner is clicked</div>
-                </div>
-                <div class="col-md-6">
-                    <label for="button_text" class="form-label">Button Text</label>
-                    <input type="text" class="form-control" id="button_text" name="button_text"
-                           value="{{ banner.button_text if banner and banner.button_text else '' }}"
-                           placeholder="Learn More, Get Started, etc.">
-                    <div class="form-text">Text for call-to-action button</div>
-                </div>
-            </div>
+            <!-- Hidden fields for link_url and button_text -->
+            <input type="hidden" name="link_url" value="{{ banner.link_url if banner and banner.link_url else '' }}">
+            <input type="hidden" name="button_text" value="{{ banner.button_text if banner and banner.button_text else '' }}">
 
             <!-- Status -->
             <div class="mb-3">

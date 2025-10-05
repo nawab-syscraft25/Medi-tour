@@ -65,6 +65,8 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "highlights": doctor.highlights,
         "awards": doctor.awards,
         "location": doctor.location,
+        "is_featured": doctor.is_featured if doctor.is_featured is not None else False,
+        "is_active": doctor.is_active if doctor.is_active is not None else True,
         "created_at": doctor.created_at,
         "images": [],  # Will be populated separately
         "faqs": [],    # Will be populated separately
@@ -98,7 +100,9 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "doctor_id": treatment.doctor_id,
         "other_doctor_name": treatment.other_doctor_name,
         "location": treatment.location,
+        "features": treatment.features,
         "rating": treatment.rating,
+        "is_featured": treatment.is_featured if treatment.is_featured is not None else False,
         "created_at": treatment.created_at,
         "images": [],  # Will be populated separately
         "faqs": [],    # Will be populated separately
@@ -690,7 +694,8 @@ async def global_search(
             models.Treatment.treatment_type.ilike(search_term),
             models.Treatment.short_description.ilike(search_term),
             models.Treatment.long_description.ilike(search_term),
-            models.Treatment.location.ilike(search_term)
+            models.Treatment.location.ilike(search_term),
+            models.Treatment.features.ilike(search_term)
         )
     ).limit(limit)
     
@@ -1479,7 +1484,8 @@ async def get_treatments(
         filters.append(or_(
             models.Treatment.name.ilike(f"%{search}%"),
             models.Treatment.short_description.ilike(f"%{search}%"),
-            models.Treatment.long_description.ilike(f"%{search}%")
+            models.Treatment.long_description.ilike(f"%{search}%"),
+            models.Treatment.features.ilike(f"%{search}%")
         ))
     if location:
         filters.append(models.Treatment.location.ilike(f"%{location}%"))
@@ -1882,6 +1888,104 @@ async def delete_faq(
     return {"message": "FAQ deleted successfully"}
 
 
+# ================================
+# IMAGE ENDPOINTS
+# ================================
+
+@router.post("/images", response_model=schemas.ImageResponse)
+async def create_image(
+    image: schemas.ImageCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new image record (admin only)"""
+    db_image = models.Image(**image.model_dump())
+    db.add(db_image)
+    await db.commit()
+    await db.refresh(db_image)
+    return db_image
+
+
+@router.get("/images", response_model=List[schemas.ImageResponse])
+async def get_images(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    owner_type: Optional[str] = Query(None),
+    owner_id: Optional[int] = Query(None),
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all images with filtering (admin only)"""
+    query = select(models.Image)
+    
+    filters = []
+    if owner_type:
+        filters.append(models.Image.owner_type == owner_type)
+    if owner_id:
+        filters.append(models.Image.owner_id == owner_id)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.Image.position, models.Image.uploaded_at.desc())
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.get("/images/{image_id}", response_model=schemas.ImageResponse)
+async def get_image(
+    image_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific image by ID (admin only)"""
+    result = await db.execute(select(models.Image).where(models.Image.id == image_id))
+    image = result.scalar_one_or_none()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return image
+
+
+@router.put("/images/{image_id}", response_model=schemas.ImageResponse)
+async def update_image(
+    image_id: int,
+    image_update: schemas.ImageBase,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing image (admin only)"""
+    result = await db.execute(select(models.Image).where(models.Image.id == image_id))
+    image = result.scalar_one_or_none()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    update_data = image_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(image, field, value)
+    
+    await db.commit()
+    await db.refresh(image)
+    return image
+
+
+@router.delete("/images/{image_id}")
+async def delete_image(
+    image_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an image (admin only)"""
+    result = await db.execute(select(models.Image).where(models.Image.id == image_id))
+    image = result.scalar_one_or_none()
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    await db.delete(image)
+    await db.commit()
+    return {"message": "Image deleted successfully"}
+
+
 # Blog endpoints
 @router.get("/blogs", response_model=List[schemas.BlogResponse])
 async def get_blogs(
@@ -2161,7 +2265,21 @@ async def get_blog_tags(db: AsyncSession = Depends(get_db)):
 # BANNER ENDPOINTS
 # ================================
 
-@router.get("/banners", response_model=List[dict])
+@router.post("/banners", response_model=schemas.BannerResponse)
+async def create_banner(
+    banner: schemas.BannerCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new banner (admin only)"""
+    db_banner = models.Banner(**banner.model_dump())
+    db.add(db_banner)
+    await db.commit()
+    await db.refresh(db_banner)
+    return db_banner
+
+
+@router.get("/banners", response_model=List[schemas.BannerResponse])
 async def get_banners(
     active_only: bool = Query(True, description="Get only active banners"),
     db: AsyncSession = Depends(get_db)
@@ -2175,25 +2293,10 @@ async def get_banners(
     result = await db.execute(query)
     banners = result.scalars().all()
     
-    return [
-        {
-            "id": banner.id,
-            "name": banner.name,
-            "title": banner.title,
-            "subtitle": banner.subtitle,
-            "description": banner.description,
-            "image_url": banner.image_url,
-            "link_url": banner.link_url,
-            "button_text": banner.button_text,
-            "position": banner.position,
-            "is_active": banner.is_active,
-            "created_at": banner.created_at
-        }
-        for banner in banners
-    ]
+    return banners
 
 
-@router.get("/banners/{banner_id}", response_model=dict)
+@router.get("/banners/{banner_id}", response_model=schemas.BannerResponse)
 async def get_banner(banner_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific banner by ID"""
     result = await db.execute(select(models.Banner).where(models.Banner.id == banner_id))
@@ -2202,26 +2305,67 @@ async def get_banner(banner_id: int, db: AsyncSession = Depends(get_db)):
     if not banner:
         raise HTTPException(status_code=404, detail="Banner not found")
     
-    return {
-        "id": banner.id,
-        "name": banner.name,
-        "title": banner.title,
-        "subtitle": banner.subtitle,
-        "description": banner.description,
-        "image_url": banner.image_url,
-        "link_url": banner.link_url,
-        "button_text": banner.button_text,
-        "position": banner.position,
-        "is_active": banner.is_active,
-        "created_at": banner.created_at
-    }
+    return banner
+
+
+@router.put("/banners/{banner_id}", response_model=schemas.BannerResponse)
+async def update_banner(
+    banner_id: int,
+    banner_update: schemas.BannerUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing banner (admin only)"""
+    result = await db.execute(select(models.Banner).where(models.Banner.id == banner_id))
+    banner = result.scalar_one_or_none()
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    update_data = banner_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(banner, field, value)
+    
+    await db.commit()
+    await db.refresh(banner)
+    return banner
+
+
+@router.delete("/banners/{banner_id}")
+async def delete_banner(
+    banner_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a banner (admin only)"""
+    result = await db.execute(select(models.Banner).where(models.Banner.id == banner_id))
+    banner = result.scalar_one_or_none()
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    await db.delete(banner)
+    await db.commit()
+    return {"message": "Banner deleted successfully"}
 
 
 # ================================
 # PARTNER HOSPITAL ENDPOINTS
 # ================================
 
-@router.get("/partners", response_model=List[dict])
+@router.post("/partners", response_model=schemas.PartnerHospitalResponse)
+async def create_partner(
+    partner: schemas.PartnerHospitalCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new partner hospital (admin only)"""
+    db_partner = models.PartnerHospital(**partner.model_dump())
+    db.add(db_partner)
+    await db.commit()
+    await db.refresh(db_partner)
+    return db_partner
+
+
+@router.get("/partners", response_model=List[schemas.PartnerHospitalResponse])
 async def get_partners(
     active_only: bool = Query(True, description="Get only active partners"),
     db: AsyncSession = Depends(get_db)
@@ -2235,23 +2379,10 @@ async def get_partners(
     result = await db.execute(query)
     partners = result.scalars().all()
     
-    return [
-        {
-            "id": partner.id,
-            "name": partner.name,
-            "description": partner.description,
-            "logo_url": partner.logo_url,
-            "website_url": partner.website_url,
-            "location": partner.location,
-            "position": partner.position,
-            "is_active": partner.is_active,
-            "created_at": partner.created_at
-        }
-        for partner in partners
-    ]
+    return partners
 
 
-@router.get("/partners/{partner_id}", response_model=dict)
+@router.get("/partners/{partner_id}", response_model=schemas.PartnerHospitalResponse)
 async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific partner hospital by ID"""
     result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
@@ -2260,64 +2391,101 @@ async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
     if not partner:
         raise HTTPException(status_code=404, detail="Partner hospital not found")
     
-    return {
-        "id": partner.id,
-        "name": partner.name,
-        "description": partner.description,
-        "logo_url": partner.logo_url,
-        "website_url": partner.website_url,
-        "location": partner.location,
-        "position": partner.position,
-        "is_active": partner.is_active,
-        "created_at": partner.created_at
-    }
+    return partner
+
+
+@router.put("/partners/{partner_id}", response_model=schemas.PartnerHospitalResponse)
+async def update_partner(
+    partner_id: int,
+    partner_update: schemas.PartnerHospitalUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing partner hospital (admin only)"""
+    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
+    partner = result.scalar_one_or_none()
+    if not partner:
+        raise HTTPException(status_code=404, detail="Partner hospital not found")
+    
+    update_data = partner_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(partner, field, value)
+    
+    await db.commit()
+    await db.refresh(partner)
+    return partner
+
+
+@router.delete("/partners/{partner_id}")
+async def delete_partner(
+    partner_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a partner hospital (admin only)"""
+    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
+    partner = result.scalar_one_or_none()
+    if not partner:
+        raise HTTPException(status_code=404, detail="Partner hospital not found")
+    
+    await db.delete(partner)
+    await db.commit()
+    return {"message": "Partner hospital deleted successfully"}
 
 
 # ================================
 # PATIENT STORY ENDPOINTS
 # ================================
 
-@router.get("/stories", response_model=List[dict])
+@router.post("/stories", response_model=schemas.PatientStoryResponse)
+async def create_patient_story(
+    story: schemas.PatientStoryCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new patient story (admin only)"""
+    db_story = models.PatientStory(**story.model_dump())
+    db.add(db_story)
+    await db.commit()
+    await db.refresh(db_story)
+    return db_story
+
+
+@router.get("/stories", response_model=List[schemas.PatientStoryResponse])
 async def get_patient_stories(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     active_only: bool = Query(True, description="Get only active stories"),
     featured_only: bool = Query(False, description="Get only featured stories"),
-    limit: int = Query(10, ge=1, le=50, description="Number of stories to return"),
+    treatment_type: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Get patient stories for frontend display"""
-    query = select(models.PatientStory).order_by(models.PatientStory.position, models.PatientStory.created_at.desc())
+    query = select(models.PatientStory)
     
+    filters = []
     if active_only:
-        query = query.where(models.PatientStory.is_active == True)
-    
+        filters.append(models.PatientStory.is_active == True)
     if featured_only:
-        query = query.where(models.PatientStory.is_featured == True)
+        filters.append(models.PatientStory.is_featured == True)
+    if treatment_type:
+        filters.append(models.PatientStory.treatment_type.ilike(f"%{treatment_type}%"))
+    if location:
+        filters.append(models.PatientStory.location.ilike(f"%{location}%"))
     
-    query = query.limit(limit)
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.PatientStory.position, models.PatientStory.created_at.desc())
     
     result = await db.execute(query)
     stories = result.scalars().all()
     
-    return [
-        {
-            "id": story.id,
-            "patient_name": story.patient_name,
-            "description": story.description,
-            "rating": story.rating,
-            "profile_photo": story.profile_photo,
-            "treatment_type": story.treatment_type,
-            "hospital_name": story.hospital_name,
-            "location": story.location,
-            "position": story.position,
-            "is_featured": story.is_featured,
-            "is_active": story.is_active,
-            "created_at": story.created_at
-        }
-        for story in stories
-    ]
+    return stories
 
 
-@router.get("/stories/{story_id}", response_model=dict)
+@router.get("/stories/{story_id}", response_model=schemas.PatientStoryResponse)
 async def get_patient_story(story_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific patient story by ID"""
     result = await db.execute(select(models.PatientStory).where(models.PatientStory.id == story_id))
@@ -2326,23 +2494,49 @@ async def get_patient_story(story_id: int, db: AsyncSession = Depends(get_db)):
     if not story:
         raise HTTPException(status_code=404, detail="Patient story not found")
     
-    return {
-        "id": story.id,
-        "patient_name": story.patient_name,
-        "description": story.description,
-        "rating": story.rating,
-        "profile_photo": story.profile_photo,
-        "treatment_type": story.treatment_type,
-        "hospital_name": story.hospital_name,
-        "location": story.location,
-        "position": story.position,
-        "is_featured": story.is_featured,
-        "is_active": story.is_active,
-        "created_at": story.created_at
-    }
+    return story
 
 
-@router.get("/stories/featured", response_model=List[dict])
+@router.put("/stories/{story_id}", response_model=schemas.PatientStoryResponse)
+async def update_patient_story(
+    story_id: int,
+    story_update: schemas.PatientStoryUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing patient story (admin only)"""
+    result = await db.execute(select(models.PatientStory).where(models.PatientStory.id == story_id))
+    story = result.scalar_one_or_none()
+    if not story:
+        raise HTTPException(status_code=404, detail="Patient story not found")
+    
+    update_data = story_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(story, field, value)
+    
+    await db.commit()
+    await db.refresh(story)
+    return story
+
+
+@router.delete("/stories/{story_id}")
+async def delete_patient_story(
+    story_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a patient story (admin only)"""
+    result = await db.execute(select(models.PatientStory).where(models.PatientStory.id == story_id))
+    story = result.scalar_one_or_none()
+    if not story:
+        raise HTTPException(status_code=404, detail="Patient story not found")
+    
+    await db.delete(story)
+    await db.commit()
+    return {"message": "Patient story deleted successfully"}
+
+
+@router.get("/stories/featured", response_model=List[schemas.PatientStoryResponse])
 async def get_featured_stories(
     limit: int = Query(5, ge=1, le=20, description="Number of featured stories to return"),
     db: AsyncSession = Depends(get_db)
@@ -2358,23 +2552,382 @@ async def get_featured_stories(
     result = await db.execute(query)
     stories = result.scalars().all()
     
-    return [
-        {
-            "id": story.id,
-            "patient_name": story.patient_name,
-            "description": story.description,
-            "rating": story.rating,
-            "profile_photo": story.profile_photo,
-            "treatment_type": story.treatment_type,
-            "hospital_name": story.hospital_name,
-            "location": story.location,
-            "position": story.position,
-            "is_featured": story.is_featured,
-            "is_active": story.is_active,
-            "created_at": story.created_at
+    return stories
+
+
+# ================================
+# APPOINTMENT ENDPOINTS
+# ================================
+
+@router.post("/appointments", response_model=schemas.AppointmentResponse)
+async def create_appointment(
+    appointment: schemas.AppointmentCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new appointment"""
+    db_appointment = models.Appointment(**appointment.model_dump())
+    db.add(db_appointment)
+    await db.commit()
+    await db.refresh(db_appointment)
+    return db_appointment
+
+
+@router.get("/appointments", response_model=List[schemas.AppointmentResponse])
+async def get_appointments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    doctor_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all appointments with filtering"""
+    query = select(models.Appointment)
+    
+    filters = []
+    if doctor_id:
+        filters.append(models.Appointment.doctor_id == doctor_id)
+    if status:
+        filters.append(models.Appointment.status == status)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.Appointment.created_at.desc())
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.get("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
+async def get_appointment(appointment_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific appointment by ID"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return appointment
+
+
+@router.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
+async def update_appointment(
+    appointment_id: int,
+    appointment_update: schemas.AppointmentUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing appointment"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    update_data = appointment_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(appointment, field, value)
+    
+    await db.commit()
+    await db.refresh(appointment)
+    return appointment
+
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    appointment_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an appointment"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    await db.delete(appointment)
+    await db.commit()
+    return {"message": "Appointment deleted successfully"}
+
+
+# ================================
+# CONTACT US ENDPOINTS
+# ================================
+
+@router.post("/contact", response_model=schemas.ContactUsResponse)
+async def create_contact(
+    contact: schemas.ContactUsCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new contact us message"""
+    db_contact = models.ContactUs(**contact.model_dump())
+    db.add(db_contact)
+    await db.commit()
+    await db.refresh(db_contact)
+    return db_contact
+
+
+@router.get("/contacts", response_model=List[schemas.ContactUsResponse])
+async def get_contacts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    service_type: Optional[str] = Query(None),
+    is_read: Optional[bool] = Query(None),
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all contact messages (admin only)"""
+    query = select(models.ContactUs)
+    
+    filters = []
+    if service_type:
+        filters.append(models.ContactUs.service_type == service_type)
+    if is_read is not None:
+        filters.append(models.ContactUs.is_read == is_read)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.ContactUs.created_at.desc())
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.get("/contacts/{contact_id}", response_model=schemas.ContactUsResponse)
+async def get_contact(
+    contact_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific contact message by ID (admin only)"""
+    result = await db.execute(select(models.ContactUs).where(models.ContactUs.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    return contact
+
+
+@router.put("/contacts/{contact_id}", response_model=schemas.ContactUsResponse)
+async def update_contact(
+    contact_id: int,
+    contact_update: schemas.ContactUsUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a contact message (admin only) - mark as read or add response"""
+    from datetime import datetime
+    
+    result = await db.execute(select(models.ContactUs).where(models.ContactUs.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    
+    update_data = contact_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(contact, field, value)
+    
+    # Set responded_at timestamp if admin_response is provided
+    if 'admin_response' in update_data and update_data['admin_response']:
+        contact.responded_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(contact)
+    return contact
+
+
+@router.delete("/contacts/{contact_id}")
+async def delete_contact(
+    contact_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a contact message (admin only)"""
+    result = await db.execute(select(models.ContactUs).where(models.ContactUs.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact message not found")
+    
+    await db.delete(contact)
+    await db.commit()
+    return {"message": "Contact message deleted successfully"}
+
+
+# ================================
+# OFFER ENDPOINTS
+# ================================
+
+@router.post("/offers", response_model=schemas.OfferResponse)
+async def create_offer(
+    offer: schemas.OfferCreate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new offer (admin only)"""
+    db_offer = models.Offer(**offer.model_dump())
+    db.add(db_offer)
+    await db.commit()
+    await db.refresh(db_offer)
+    return db_offer
+
+
+@router.get("/offers", response_model=List[schemas.OfferResponse])
+async def get_offers(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    active_only: bool = Query(True),
+    current_only: bool = Query(False, description="Get only currently active offers"),
+    treatment_type: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all offers with filtering"""
+    from datetime import datetime
+    
+    query = select(models.Offer)
+    
+    filters = []
+    if active_only:
+        filters.append(models.Offer.is_active == True)
+    if current_only:
+        now = datetime.utcnow()
+        filters.append(and_(
+            models.Offer.start_date <= now,
+            models.Offer.end_date >= now,
+            models.Offer.is_active == True
+        ))
+    if treatment_type:
+        filters.append(models.Offer.treatment_type.ilike(f"%{treatment_type}%"))
+    if location:
+        filters.append(models.Offer.location.ilike(f"%{location}%"))
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.Offer.start_date.desc())
+    
+    result = await db.execute(query)
+    offers = result.scalars().all()
+    
+    # Load images for each offer within the session
+    offer_results = []
+    for offer in offers:
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == offer.id,
+                    models.Image.owner_type == 'offer'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+        
+        offer_dict = {
+            "id": offer.id,
+            "name": offer.name,
+            "description": offer.description,
+            "treatment_type": offer.treatment_type,
+            "location": offer.location,
+            "start_date": offer.start_date,
+            "end_date": offer.end_date,
+            "discount_percentage": offer.discount_percentage,
+            "is_free_camp": offer.is_free_camp,
+            "treatment_id": offer.treatment_id,
+            "is_active": offer.is_active,
+            "created_at": offer.created_at,
+            "updated_at": offer.updated_at,
+            "images": [
+                {
+                    "id": img.id,
+                    "url": img.url,
+                    "is_primary": img.is_primary,
+                    "position": img.position,
+                    "uploaded_at": img.uploaded_at
+                } for img in images
+            ]
         }
-        for story in stories
-    ]
+        offer_results.append(offer_dict)
+    
+    return offer_results
+
+
+@router.get("/offers/{offer_id}", response_model=schemas.OfferResponse)
+async def get_offer(offer_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a specific offer by ID"""
+    result = await db.execute(select(models.Offer).where(models.Offer.id == offer_id))
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    # Load images for the offer within the session
+    images_result = await db.execute(
+        select(models.Image).where(
+            and_(
+                models.Image.owner_id == offer.id,
+                models.Image.owner_type == 'offer'
+            )
+        ).order_by(models.Image.position)
+    )
+    images = images_result.scalars().all()
+    
+    return {
+        "id": offer.id,
+        "name": offer.name,
+        "description": offer.description,
+        "treatment_type": offer.treatment_type,
+        "location": offer.location,
+        "start_date": offer.start_date,
+        "end_date": offer.end_date,
+        "discount_percentage": offer.discount_percentage,
+        "is_free_camp": offer.is_free_camp,
+        "treatment_id": offer.treatment_id,
+        "is_active": offer.is_active,
+        "created_at": offer.created_at,
+        "updated_at": offer.updated_at,
+        "images": [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ]
+    }
+
+
+@router.put("/offers/{offer_id}", response_model=schemas.OfferResponse)
+async def update_offer(
+    offer_id: int,
+    offer_update: schemas.OfferUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing offer (admin only)"""
+    result = await db.execute(select(models.Offer).where(models.Offer.id == offer_id))
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    update_data = offer_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(offer, field, value)
+    
+    await db.commit()
+    await db.refresh(offer)
+    return offer
+
+
+@router.delete("/offers/{offer_id}")
+async def delete_offer(
+    offer_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an offer (admin only)"""
+    result = await db.execute(select(models.Offer).where(models.Offer.id == offer_id))
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    await db.delete(offer)
+    await db.commit()
+    return {"message": "Offer deleted successfully"}
 
 
 # ================================
@@ -2415,3 +2968,57 @@ async def get_story_hospitals(db: AsyncSession = Depends(get_db)):
     # Filter out empty values and sort
     valid_hospitals = [h.strip() for h in hospitals if h and h.strip()]
     return sorted(valid_hospitals)
+
+
+@router.get("/filters/offer-locations", response_model=List[str])
+async def get_offer_locations(db: AsyncSession = Depends(get_db)):
+    """Get all unique locations from offers"""
+    result = await db.execute(
+        select(models.Offer.location).distinct().where(
+            and_(
+                models.Offer.location.isnot(None),
+                models.Offer.is_active == True
+            )
+        )
+    )
+    locations = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_locations = [l.strip() for l in locations if l and l.strip()]
+    return sorted(valid_locations)
+
+
+@router.get("/filters/offer-treatment-types", response_model=List[str])
+async def get_offer_treatment_types(db: AsyncSession = Depends(get_db)):
+    """Get all unique treatment types from offers"""
+    result = await db.execute(
+        select(models.Offer.treatment_type).distinct().where(
+            and_(
+                models.Offer.treatment_type.isnot(None),
+                models.Offer.is_active == True
+            )
+        )
+    )
+    treatment_types = result.scalars().all()
+    
+    # Filter out empty values and sort
+    valid_types = [t.strip() for t in treatment_types if t and t.strip()]
+    return sorted(valid_types)
+
+
+@router.get("/filters/treatment-features", response_model=List[str])
+async def get_treatment_features(db: AsyncSession = Depends(get_db)):
+    """Get all unique features from treatments"""
+    result = await db.execute(
+        select(models.Treatment.features).distinct().where(models.Treatment.features.isnot(None))
+    )
+    features_list = result.scalars().all()
+    
+    # Parse comma-separated features and create unique list
+    all_features = set()
+    for features in features_list:
+        if features and features.strip():
+            feature_items = [f.strip() for f in features.split(",") if f.strip()]
+            all_features.update(feature_items)
+    
+    return sorted(list(all_features))

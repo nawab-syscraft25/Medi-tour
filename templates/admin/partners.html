@@ -20,11 +20,8 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Position</th>
                         <th>Hospital Name</th>
                         <th>Logo</th>
-                        <th>Location</th>
-                        <th>Website</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -34,35 +31,13 @@
                     {% for partner in partners %}
                     <tr>
                         <td>
-                            <span class="badge bg-secondary">{{ partner.position }}</span>
-                        </td>
-                        <td>
                             <strong>{{ partner.name }}</strong>
-                            {% if partner.description %}
-                            <br><small class="text-muted">{{ partner.description[:50] }}{% if partner.description|length > 50 %}...{% endif %}</small>
-                            {% endif %}
                         </td>
                         <td>
                             {% if partner.logo_url %}
                             <img src="{{ partner.logo_url }}" alt="{{ partner.name }} Logo" class="img-thumbnail" style="width: 60px; height: 40px; object-fit: contain;">
                             {% else %}
                             <span class="text-muted">No logo</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if partner.location %}
-                                {{ partner.location }}
-                            {% else %}
-                                <span class="text-muted">Not specified</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if partner.website_url %}
-                            <a href="{{ partner.website_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-external-link-alt"></i>
-                            </a>
-                            {% else %}
-                            <span class="text-muted">No website</span>
                             {% endif %}
                         </td>
                         <td>

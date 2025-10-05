@@ -94,15 +94,8 @@
                 {% endif %}
             </div>
 
-            <!-- Display Settings -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="position" class="form-label">Display Position</label>
-                    <input type="number" class="form-control" id="position" name="position" min="0"
-                           value="{{ story.position if story else 0 }}">
-                    <div class="form-text">Lower numbers appear first</div>
-                </div>
-            </div>
+            <!-- Hidden field for position -->
+            <input type="hidden" name="position" value="{{ story.position if story else 0 }}">
 
             <!-- Status Options -->
             <div class="mb-3">
