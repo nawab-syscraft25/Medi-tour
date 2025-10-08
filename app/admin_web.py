@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -200,6 +200,9 @@ async def get_dashboard_stats(db: AsyncSession):
     stats["featured_stories"] = await db.scalar(select(func.count(PatientStory.id)).where(PatientStory.is_featured == True))
     stats["admins"] = await db.scalar(select(func.count(Admin.id)))
     stats["images"] = await db.scalar(select(func.count(Image.id)))
+    stats["users"] = await db.scalar(select(func.count(User.id)))
+    stats["active_users"] = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
+    stats["verified_users"] = await db.scalar(select(func.count(User.id)).where(User.is_email_verified == True))
     
     # Recent contacts
     recent_contacts = await db.execute(
@@ -589,6 +592,38 @@ async def admin_contacts(
         "total": total
     })
 
+@router.get("/admin/contacts/{contact_id}")
+async def get_contact_details(
+    contact_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get individual contact details (API endpoint for modal)"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    contact = await db.get(Contact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Convert contact to dict for JSON response
+    return {
+        "id": contact.id,
+        "name": contact.name,
+        "first_name": contact.first_name,
+        "last_name": contact.last_name,
+        "email": contact.email,
+        "phone": contact.phone,
+        "subject": contact.subject,
+        "message": contact.message,
+        "service_type": contact.service_type,
+        "is_read": contact.is_read,
+        "admin_response": contact.admin_response,
+        "responded_at": contact.responded_at.isoformat() if contact.responded_at else None,
+        "created_at": contact.created_at.isoformat() if contact.created_at else None
+    }
+
 @router.post("/admin/contacts/{contact_id}/mark-read")
 async def mark_contact_read(
     contact_id: int,
@@ -657,6 +692,24 @@ async def delete_contact(
     await db.commit()
     
     return {"message": "Contact deleted successfully"}
+
+@router.post("/admin/contacts/mark-all-read")
+async def mark_all_contacts_read(
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Mark all contacts as read"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Update all unread contacts to read
+    await db.execute(
+        Contact.__table__.update().where(Contact.is_read == False).values(is_read=True)
+    )
+    await db.commit()
+    
+    return {"message": "All contacts marked as read"}
 
 # Package Booking Management
 @router.get("/admin/bookings", response_class=HTMLResponse)
@@ -827,6 +880,7 @@ async def get_booking_details(
         "user_query": booking.user_query,
         "travel_assistant": booking.travel_assistant,
         "stay_assistant": booking.stay_assistant,
+        "personal_assistant": booking.personal_assistant,
         "created_at": booking.created_at.isoformat() if booking.created_at else None
     }
 
@@ -4020,5 +4074,169 @@ async def admin_story_delete(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error deleting patient story: {str(e)}")
+
+
+# User Management
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users(
+    request: Request,
+    page: int = 1,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """User management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    limit = 15
+    offset = (page - 1) * limit
+    
+    # Build query
+    query = select(User)
+    
+    # Apply search filter
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.where(
+            (User.name.ilike(search_term)) |
+            (User.email.ilike(search_term)) |
+            (User.phone.ilike(search_term))
+        )
+    
+    # Apply status filter
+    if status:
+        if status == "active":
+            query = query.where(User.is_active == True)
+        elif status == "inactive":
+            query = query.where(User.is_active == False)
+        elif status == "verified":
+            query = query.where(User.is_email_verified == True)
+        elif status == "unverified":
+            query = query.where(User.is_email_verified == False)
+    
+    # Add ordering and pagination
+    query = query.order_by(User.created_at.desc()).offset(offset).limit(limit)
+    
+    result = await db.execute(query)
+    users = result.scalars().all()
+    
+    # Get total count for pagination
+    count_query = select(func.count(User.id))
+    if search:
+        search_term = f"%{search.strip()}%"
+        count_query = count_query.where(
+            (User.name.ilike(search_term)) |
+            (User.email.ilike(search_term)) |
+            (User.phone.ilike(search_term))
+        )
+    if status:
+        if status == "active":
+            count_query = count_query.where(User.is_active == True)
+        elif status == "inactive":
+            count_query = count_query.where(User.is_active == False)
+        elif status == "verified":
+            count_query = count_query.where(User.is_email_verified == True)
+        elif status == "unverified":
+            count_query = count_query.where(User.is_email_verified == False)
+    
+    total = await db.scalar(count_query)
+    total_pages = (total + limit - 1) // limit
+    
+    # Get user statistics
+    total_users = await db.scalar(select(func.count(User.id)))
+    active_users = await db.scalar(select(func.count(User.id)).where(User.is_active == True))
+    verified_users = await db.scalar(select(func.count(User.id)).where(User.is_email_verified == True))
+    
+    # Recent users (last 30 days)
+    month_ago = datetime.utcnow() - timedelta(days=30)
+    recent_users = await db.scalar(
+        select(func.count(User.id)).where(User.created_at >= month_ago)
+    )
+    
+    return render_template("admin/users.html", {
+        "request": request,
+        "admin": admin,
+        "users": users,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "search": search or "",
+        "status": status,
+        "total_users": total_users,
+        "active_users": active_users,
+        "verified_users": verified_users,
+        "recent_users": recent_users
+    })
+
+@router.get("/admin/users/{user_id}")
+async def get_user_details(
+    user_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get individual user details (API endpoint for modal)"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Convert user to dict for JSON response (excluding sensitive fields)
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "is_email_verified": user.is_email_verified,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login": user.last_login.isoformat() if user.last_login else None
+    }
+
+@router.post("/admin/users/{user_id}/toggle-status")
+async def toggle_user_status(
+    user_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle user active status"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_active = not user.is_active
+    await db.commit()
+    
+    status_text = "activated" if user.is_active else "deactivated"
+    return {"message": f"User {status_text} successfully"}
+
+@router.delete("/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a user"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.delete(user)
+    await db.commit()
+    
+    return {"message": "User deleted successfully"}
 
 
