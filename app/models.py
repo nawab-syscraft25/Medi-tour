@@ -199,6 +199,7 @@ class PackageBooking(Base):
     user_query = Column(Text, nullable=True)
     travel_assistant = Column(Boolean, default=False)
     stay_assistant = Column(Boolean, default=False)
+    personal_assistant = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationship

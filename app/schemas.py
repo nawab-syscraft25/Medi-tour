@@ -515,6 +515,7 @@ class PackageBookingBase(BaseModel):
     user_query: Optional[str] = None
     travel_assistant: bool = False
     stay_assistant: bool = False
+    personal_assistant: bool = False
 
 
 class PackageBookingCreate(PackageBookingBase):
@@ -534,6 +535,7 @@ class PackageBookingUpdate(BaseModel):
     user_query: Optional[str] = None
     travel_assistant: Optional[bool] = None
     stay_assistant: Optional[bool] = None
+    personal_assistant: Optional[bool] = None
 
 
 class PackageBookingResponse(PackageBookingBase, BaseSchema):

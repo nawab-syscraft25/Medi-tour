@@ -1779,15 +1779,54 @@ async def get_doctor_locations(db: AsyncSession = Depends(get_db)):
 
 @router.get("/filters/treatment-types", response_model=List[str])
 async def get_treatment_types(db: AsyncSession = Depends(get_db)):
-    """Get all unique treatment types for dropdown"""
+    """Get all unique treatment types for dropdown (categories only, not individual treatment names)"""
+    # Debug: Let's see what the raw query returns
     result = await db.execute(
-        select(models.Treatment.treatment_type).distinct().where(models.Treatment.treatment_type.isnot(None))
+        select(models.Treatment.treatment_type)
+        .distinct()
+        .where(models.Treatment.treatment_type.isnot(None))
+        .where(models.Treatment.treatment_type != "")
     )
     treatment_types = result.scalars().all()
     
-    # Filter out empty values and sort
-    valid_types = [t.strip() for t in treatment_types if t and t.strip()]
-    return sorted(valid_types)
+    # Debug logging (you can remove this later)
+    print(f"Raw treatment_types from DB: {treatment_types}")
+    
+    # Filter out empty values, clean whitespace, and ensure uniqueness
+    valid_types = set()
+    for t in treatment_types:
+        if t and t.strip():
+            # Clean and standardize the type name
+            clean_type = t.strip()
+            valid_types.add(clean_type)
+            print(f"Added clean_type: {clean_type}")
+    
+    final_result = sorted(list(valid_types))
+    print(f"Final result: {final_result}")
+    
+    return final_result
+
+@router.get("/debug/treatment-types")
+async def debug_treatment_types(db: AsyncSession = Depends(get_db)):
+    """Debug endpoint to see all treatment names and types"""
+    result = await db.execute(
+        select(models.Treatment.id, models.Treatment.name, models.Treatment.treatment_type)
+        .order_by(models.Treatment.id)
+    )
+    treatments = result.all()
+    
+    return {
+        "total_treatments": len(treatments),
+        "treatments": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "treatment_type": t.treatment_type
+            } for t in treatments
+        ],
+        "unique_treatment_types": list(set([t.treatment_type for t in treatments if t.treatment_type])),
+        "treatment_types_count": len(set([t.treatment_type for t in treatments if t.treatment_type]))
+    }
 
 
 @router.get("/filters/specializations", response_model=List[str])

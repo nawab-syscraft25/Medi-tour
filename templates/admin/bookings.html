@@ -188,6 +188,11 @@
                                     <i class="fas fa-bed"></i>
                                 </span>
                                 {% endif %}
+                                {% if booking.personal_assistant %}
+                                <span class="badge bg-success" title="Personal Assistant Requested">
+                                    <i class="fas fa-user-tie"></i>
+                                </span>
+                                {% endif %}
                                 {% if booking.medical_history_file %}
                                 <span class="badge bg-secondary" title="Medical History Uploaded">
                                     <i class="fas fa-file-medical"></i>
@@ -348,6 +353,7 @@
                     <div class="d-flex gap-2">
                         ${booking.travel_assistant ? '<span class="badge bg-info"><i class="fas fa-plane me-1"></i>Travel Assistant</span>' : ''}
                         ${booking.stay_assistant ? '<span class="badge bg-warning"><i class="fas fa-bed me-1"></i>Stay Assistant</span>' : ''}
+                        ${booking.personal_assistant ? '<span class="badge bg-success"><i class="fas fa-user-tie me-1"></i>Personal Assistant</span>' : ''}
                         ${booking.medical_history_file ? '<span class="badge bg-secondary"><i class="fas fa-file-medical me-1"></i>Medical History</span>' : ''}
                     </div>
                     ${booking.medical_history_file ? `<div class="mt-2"><small class="text-muted">File: ${booking.medical_history_file}</small></div>` : ''}
