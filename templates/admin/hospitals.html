@@ -21,17 +21,58 @@
 <!-- Hospitals Table -->
 <div class="card">
     <div class="card-header">
-        <div class="row align-items-center">
+        <div class="row align-items-center mb-3">
             <div class="col">
-                <h5 class="card-title mb-0">All Hospitals ({{ total }} total)</h5>
+                <h5 class="card-title mb-0">All Hospitals (<span id="totalCount">{{ total }}</span> total)</h5>
             </div>
             <div class="col-auto">
-                <div class="input-group">
-                    <input type="text" class="form-control" placeholder="Search hospitals..." id="searchInput">
-                    <button class="btn btn-outline-secondary" type="button">
-                        <i class="fas fa-search"></i>
-                    </button>
+                <button class="btn btn-success btn-sm" onclick="exportHospitals()">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- Filter Controls -->
+        <div class="row g-2">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search by name..." id="searchInput">
                 </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="locationFilter">
+                    <option value="">All Locations</option>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="specializationFilter">
+                    <option value="">All Specializations</option>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="ratingFilter">
+                    <option value="">All Ratings</option>
+                    <option value="5">5 Stars</option>
+                    <option value="4">4+ Stars</option>
+                    <option value="3">3+ Stars</option>
+                    <option value="2">2+ Stars</option>
+                    <option value="1">1+ Stars</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()" title="Clear all filters">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -54,7 +95,11 @@
                 </thead>
                 <tbody>
                     {% for hospital in hospitals %}
-                    <tr>
+                    <tr data-location="{{ hospital.location|lower }}" 
+                        data-specializations="{{ hospital.specializations|lower if hospital.specializations else '' }}" 
+                        data-status="{{ 'active' if hospital.is_active else 'inactive' }}"
+                        data-rating="{{ hospital.rating if hospital.rating else 0 }}"
+                        data-name="{{ hospital.name|lower }}">
                         <!-- <td><strong>#{{ hospital.id }}</strong></td> -->
                         <td>
                             <div class="d-flex align-items-center">
@@ -239,20 +284,162 @@
 
 {% block extra_scripts %}
 <script>
-// Search functionality
-document.getElementById('searchInput').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
+// Initialize filters when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    populateFilterOptions();
+    setupFilterListeners();
+});
+
+// Setup event listeners for all filters
+function setupFilterListeners() {
+    document.getElementById('searchInput').addEventListener('input', filterHospitals);
+    document.getElementById('locationFilter').addEventListener('change', filterHospitals);
+    document.getElementById('specializationFilter').addEventListener('change', filterHospitals);
+    document.getElementById('statusFilter').addEventListener('change', filterHospitals);
+    document.getElementById('ratingFilter').addEventListener('change', filterHospitals);
+}
+
+// Populate filter dropdown options from existing data
+function populateFilterOptions() {
     const rows = document.querySelectorAll('tbody tr');
+    const locations = new Set();
+    const specializations = new Set();
     
     rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        if (text.includes(searchTerm)) {
+        // Get location
+        const location = row.dataset.location;
+        if (location && location.trim()) {
+            locations.add(location.trim());
+        }
+        
+        // Get specializations
+        const specs = row.dataset.specializations;
+        if (specs && specs.trim()) {
+            specs.split(',').forEach(spec => {
+                const trimmedSpec = spec.trim();
+                if (trimmedSpec) {
+                    specializations.add(trimmedSpec);
+                }
+            });
+        }
+    });
+    
+    // Populate location filter
+    const locationFilter = document.getElementById('locationFilter');
+    const sortedLocations = Array.from(locations).sort();
+    sortedLocations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location.charAt(0).toUpperCase() + location.slice(1);
+        locationFilter.appendChild(option);
+    });
+    
+    // Populate specialization filter
+    const specializationFilter = document.getElementById('specializationFilter');
+    const sortedSpecializations = Array.from(specializations).sort();
+    sortedSpecializations.forEach(spec => {
+        const option = document.createElement('option');
+        option.value = spec;
+        option.textContent = spec.charAt(0).toUpperCase() + spec.slice(1);
+        specializationFilter.appendChild(option);
+    });
+}
+
+// Main filtering function
+function filterHospitals() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const locationFilter = document.getElementById('locationFilter').value.toLowerCase();
+    const specializationFilter = document.getElementById('specializationFilter').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const location = row.dataset.location || '';
+        const specializations = row.dataset.specializations || '';
+        const status = row.dataset.status || '';
+        const rating = parseFloat(row.dataset.rating || '0');
+        
+        // Check all filter conditions
+        const matchesSearch = !searchTerm || name.includes(searchTerm) || 
+                            location.includes(searchTerm) || 
+                            specializations.includes(searchTerm);
+        
+        const matchesLocation = !locationFilter || location === locationFilter;
+        
+        const matchesSpecialization = !specializationFilter || 
+                                    specializations.includes(specializationFilter);
+        
+        const matchesStatus = !statusFilter || status === statusFilter;
+        
+        const matchesRating = !ratingFilter || rating >= parseFloat(ratingFilter);
+        
+        // Show/hide row based on all filters
+        if (matchesSearch && matchesLocation && matchesSpecialization && 
+            matchesStatus && matchesRating) {
             row.style.display = '';
+            visibleCount++;
         } else {
             row.style.display = 'none';
         }
     });
-});
+    
+    // Update total count
+    document.getElementById('totalCount').textContent = visibleCount;
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('locationFilter').value = '';
+    document.getElementById('specializationFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('ratingFilter').value = '';
+    filterHospitals();
+}
+
+// Export hospitals with current filters
+function exportHospitals() {
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+    button.disabled = true;
+    
+    // Build export URL with current filters
+    const searchTerm = document.getElementById('searchInput').value;
+    const locationFilter = document.getElementById('locationFilter').value;
+    const specializationFilter = document.getElementById('specializationFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    
+    const params = new URLSearchParams();
+    params.append('export', 'true');
+    
+    if (searchTerm) params.append('search', searchTerm);
+    if (locationFilter) params.append('location', locationFilter);
+    if (specializationFilter) params.append('specialization', specializationFilter);
+    if (statusFilter) params.append('status', statusFilter);
+    if (ratingFilter) params.append('rating', ratingFilter);
+    
+    // Create a temporary link to trigger download  
+    const link = document.createElement('a');
+    link.href = `/admin/hospitals?${params.toString()}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 2000);
+}
 
 // View hospital details
 async function viewHospitalDetails(hospitalId) {

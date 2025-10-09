@@ -305,20 +305,116 @@ async def admin_dashboard(
 async def admin_hospitals(
     request: Request,
     page: int = 1,
+    search: Optional[str] = None,
+    location: Optional[str] = None,
+    specialization: Optional[str] = None,
+    status: Optional[str] = None,
+    rating: Optional[float] = None,
+    export: Optional[bool] = False,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Hospital management page"""
+    """Hospital management page with filtering and export"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
+    # Build query with filters
+    query = select(Hospital)
+    count_query = select(func.count(Hospital.id))
+    
+    # Apply filters
+    conditions = []
+    
+    if search:
+        search_condition = or_(
+            Hospital.name.ilike(f"%{search}%"),
+            Hospital.location.ilike(f"%{search}%"),
+            Hospital.specializations.ilike(f"%{search}%"),
+            Hospital.description.ilike(f"%{search}%")
+        )
+        conditions.append(search_condition)
+    
+    if location:
+        conditions.append(Hospital.location.ilike(f"%{location}%"))
+    
+    if specialization:
+        conditions.append(Hospital.specializations.ilike(f"%{specialization}%"))
+    
+    if status == "active":
+        conditions.append(Hospital.is_active == True)
+    elif status == "inactive":
+        conditions.append(Hospital.is_active == False)
+    
+    if rating:
+        conditions.append(Hospital.rating >= rating)
+    
+    # Apply all conditions
+    if conditions:
+        query = query.where(and_(*conditions))
+        count_query = count_query.where(and_(*conditions))
+    
+    # Handle export
+    if export:
+        result = await db.execute(query.order_by(desc(Hospital.created_at)))
+        hospitals = result.scalars().all()
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Location', 'Address', 'Phone', 'Email', 
+            'Specializations', 'Rating', 'Status', 'Features', 'Facilities',
+            'Description', 'Created Date'
+        ])
+        
+        # Write data
+        for hospital in hospitals:
+            writer.writerow([
+                hospital.id,
+                hospital.name,
+                hospital.location,
+                hospital.address or '',
+                hospital.phone or '',
+                hospital.email or '',
+                hospital.specializations or '',
+                hospital.rating or '',
+                'Active' if hospital.is_active else 'Inactive',
+                hospital.features or '',
+                hospital.facilities or '',
+                hospital.description or '',
+                hospital.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+        
+        output.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        from datetime import datetime
+        
+        def iter_csv():
+            yield output.getvalue()
+        
+        filename = f"hospitals_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    # Get total count for pagination
+    total = await db.scalar(count_query)
+    
+    # Apply pagination for regular view
     limit = 10
     offset = (page - 1) * limit
-    
-    # Get hospitals with pagination
     result = await db.execute(
-        select(Hospital).order_by(desc(Hospital.created_at)).offset(offset).limit(limit)
+        query.order_by(desc(Hospital.created_at)).offset(offset).limit(limit)
     )
     hospitals = result.scalars().all()
 
@@ -333,8 +429,6 @@ async def admin_hospitals(
         )
         hospital_faqs_map[hospital.id] = faqs_result.scalars().all()
 
-    # Get total count for pagination
-    total = await db.scalar(select(func.count(Hospital.id)))
     total_pages = (total + limit - 1) // limit
 
     return render_template("admin/hospitals.html", {
@@ -344,7 +438,12 @@ async def admin_hospitals(
         "hospital_faqs_map": hospital_faqs_map,
         "page": page,
         "total_pages": total_pages,
-        "total": total
+        "total": total,
+        "search": search,
+        "location": location,
+        "specialization": specialization,
+        "status": status,
+        "rating": rating
     })
 
 @router.get("/admin/hospitals/new", response_class=HTMLResponse)
@@ -415,34 +514,140 @@ async def admin_hospital_edit(
 async def admin_doctors(
     request: Request,
     page: int = 1,
+    search: Optional[str] = None,
+    specialization: Optional[str] = None,
+    hospital: Optional[str] = None,
+    experience: Optional[int] = None,
+    rating: Optional[float] = None,
+    status: Optional[str] = None,
+    export: Optional[bool] = False,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Doctor management page"""
+    """Doctor management page with filtering and export"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
+    # Build query with filters
+    query = select(Doctor).options(selectinload(Doctor.hospital))
+    count_query = select(func.count(Doctor.id))
+    
+    # Apply filters
+    conditions = []
+    
+    if search:
+        search_condition = or_(
+            Doctor.name.ilike(f"%{search}%"),
+            Doctor.specialization.ilike(f"%{search}%"),
+            Doctor.qualification.ilike(f"%{search}%")
+        )
+        conditions.append(search_condition)
+    
+    if specialization:
+        conditions.append(Doctor.specialization.ilike(f"%{specialization}%"))
+    
+    if hospital:
+        # Join with hospital table for filtering
+        query = query.join(Hospital, Doctor.hospital_id == Hospital.id)
+        count_query = count_query.join(Hospital, Doctor.hospital_id == Hospital.id)
+        conditions.append(Hospital.name.ilike(f"%{hospital}%"))
+    
+    if experience:
+        conditions.append(Doctor.experience_years >= experience)
+    
+    if rating:
+        conditions.append(Doctor.rating >= rating)
+    
+    if status == "available":
+        conditions.append(Doctor.is_active == True)
+    elif status == "unavailable":
+        conditions.append(Doctor.is_active == False)
+    
+    # Apply all conditions
+    if conditions:
+        query = query.where(and_(*conditions))
+        count_query = count_query.where(and_(*conditions))
+    
+    # Handle export
+    if export:
+        result = await db.execute(query.order_by(desc(Doctor.created_at)))
+        doctors = result.scalars().all()
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Specialization', 'Hospital', 'Hospital Location', 
+            'Experience (Years)', 'Rating', 'Status', 'Qualification', 
+            'Phone', 'Email', 'Bio', 'Created Date'
+        ])
+        
+        # Write data
+        for doctor in doctors:
+            writer.writerow([
+                doctor.id,
+                f"Dr. {doctor.name}",
+                doctor.specialization or '',
+                doctor.hospital.name if doctor.hospital else '',
+                doctor.hospital.location if doctor.hospital else '',
+                doctor.experience_years or '',
+                doctor.rating or '',
+                'Available' if doctor.is_active else 'Unavailable',
+                doctor.qualification or '',
+                doctor.phone or '',
+                doctor.email or '',
+                doctor.bio or '',
+                doctor.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+        
+        output.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        from datetime import datetime
+        
+        def iter_csv():
+            yield output.getvalue()
+        
+        filename = f"doctors_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    # Get total count for pagination
+    total = await db.scalar(count_query)
+    
+    # Apply pagination for regular view
     limit = 10
     offset = (page - 1) * limit
-    
-    # Get doctors with pagination, loading hospital relationship eagerly
     result = await db.execute(
-        select(Doctor).options(selectinload(Doctor.hospital)).order_by(desc(Doctor.created_at)).offset(offset).limit(limit)
+        query.order_by(desc(Doctor.created_at)).offset(offset).limit(limit)
     )
     doctors = result.scalars().all()
     
-    # Get total count for pagination
-    total = await db.scalar(select(func.count(Doctor.id)))
     total_pages = (total + limit - 1) // limit
-    
+
     return render_template("admin/doctors.html", {
         "request": request,
         "admin": admin,
         "doctors": doctors,
         "page": page,
         "total_pages": total_pages,
-        "total": total
+        "total": total,
+        "search": search,
+        "specialization": specialization,
+        "hospital": hospital,
+        "experience": experience,
+        "rating": rating,
+        "status": status
     })
 
 # Treatment Management
@@ -564,25 +769,131 @@ async def admin_offers(
 async def admin_contacts(
     request: Request,
     page: int = 1,
+    export: Optional[str] = None,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Contact management page"""
+    """Contact management page with filtering"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
+    # Build base query with filters
+    query = select(Contact)
+    conditions = []
+    
+    # Search filter
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        conditions.append(
+            or_(
+                Contact.first_name.ilike(search_term),
+                Contact.last_name.ilike(search_term),
+                Contact.email.ilike(search_term),
+                Contact.phone.ilike(search_term),
+                Contact.subject.ilike(search_term),
+                Contact.message.ilike(search_term),
+                Contact.service_type.ilike(search_term)
+            )
+        )
+    
+    # Status filter
+    if status:
+        if status == "new":
+            conditions.append(Contact.is_read == False)
+        elif status == "read":
+            conditions.append(Contact.is_read == True)
+    
+    # Date filters
+    if date_from:
+        try:
+            from_date = datetime.strptime(date_from, "%Y-%m-%d")
+            conditions.append(Contact.created_at >= from_date)
+        except ValueError:
+            pass  # Invalid date format, ignore
+    
+    if date_to:
+        try:
+            to_date = datetime.strptime(date_to, "%Y-%m-%d")
+            # Include the entire day
+            to_date = to_date.replace(hour=23, minute=59, second=59)
+            conditions.append(Contact.created_at <= to_date)
+        except ValueError:
+            pass  # Invalid date format, ignore
+    
+    # Apply conditions
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    # Handle export request
+    if export == "true":
+        # Get filtered contacts for export
+        result = await db.execute(query.order_by(desc(Contact.created_at)))
+        contacts = result.scalars().all()
+        
+        # Generate CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Email', 'Phone', 'Subject', 'Message', 
+            'Service Type', 'Status', 'Created Date', 'Read At'
+        ])
+        
+        # Write data
+        for contact in contacts:
+            writer.writerow([
+                contact.id,
+                contact.name or f"{getattr(contact, 'first_name', '')} {getattr(contact, 'last_name', '')}".strip(),
+                contact.email,
+                getattr(contact, 'phone', '') or 'N/A',
+                contact.subject or 'N/A',
+                contact.message or 'N/A',
+                getattr(contact, 'service_type', '') or 'N/A',
+                'Read' if contact.is_read else 'New',
+                contact.created_at.strftime('%Y-%m-%d %H:%M:%S') if contact.created_at else 'N/A',
+                contact.read_at.strftime('%Y-%m-%d %H:%M:%S') if getattr(contact, 'read_at', None) else 'N/A'
+            ])
+        
+        output.seek(0)
+        
+        # Create filename with current date and filters
+        filename_parts = ["contacts_export"]
+        if search:
+            filename_parts.append(f"search_{search[:10]}")
+        if status:
+            filename_parts.append(f"status_{status}")
+        if date_from or date_to:
+            filename_parts.append("filtered")
+        filename_parts.append(datetime.now().strftime('%Y%m%d_%H%M%S'))
+        filename = "_".join(filename_parts) + ".csv"
+        
+        # Return CSV file
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
     limit = 10
     offset = (page - 1) * limit
     
-    # Get contacts with pagination
+    # Get filtered contacts with pagination
     result = await db.execute(
-        select(Contact).order_by(desc(Contact.created_at)).offset(offset).limit(limit)
+        query.order_by(desc(Contact.created_at)).offset(offset).limit(limit)
     )
     contacts = result.scalars().all()
     
-    # Get total count for pagination
-    total = await db.scalar(select(func.count(Contact.id)))
+    # Get total count for pagination with same filters
+    total_query = select(func.count(Contact.id))
+    if conditions:
+        total_query = total_query.where(and_(*conditions))
+    total = await db.scalar(total_query)
     total_pages = (total + limit - 1) // limit
     
     return render_template("admin/contacts.html", {
@@ -591,7 +902,11 @@ async def admin_contacts(
         "contacts": contacts,
         "page": page,
         "total_pages": total_pages,
-        "total": total
+        "total": total,
+        "search": search,
+        "status": status,
+        "date_from": date_from,
+        "date_to": date_to
     })
 
 @router.get("/admin/contacts/{contact_id}")
@@ -712,6 +1027,72 @@ async def mark_all_contacts_read(
     await db.commit()
     
     return {"message": "All contacts marked as read"}
+
+
+@router.post("/admin/contacts/bulk-mark-read")
+async def bulk_mark_contacts_read(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Mark selected contacts as read"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    data = await request.json()
+    contact_ids = data.get("contact_ids", [])
+    
+    if not contact_ids:
+        raise HTTPException(status_code=400, detail="No contact IDs provided")
+    
+    # Update selected contacts to read
+    await db.execute(
+        Contact.__table__.update().where(Contact.id.in_(contact_ids)).values(is_read=True)
+    )
+    await db.commit()
+    
+    return {"message": f"{len(contact_ids)} contacts marked as read"}
+
+
+@router.put("/admin/contacts/{contact_id}")
+async def update_contact(
+    contact_id: int,
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: Optional[str] = Form(None),
+    subject: Optional[str] = Form(None),
+    message: Optional[str] = Form(None),
+    service_type: Optional[str] = Form(None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update contact information"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Get contact
+    result = await db.execute(select(Contact).where(Contact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Update contact fields - split name into first_name and last_name
+    name_parts = name.strip().split(' ', 1) if name else ['', '']
+    contact.first_name = name_parts[0] if name_parts[0] else contact.first_name
+    contact.last_name = name_parts[1] if len(name_parts) > 1 else ''
+    contact.email = email
+    contact.phone = phone if phone else contact.phone
+    contact.subject = subject if subject else contact.subject
+    contact.message = message if message else contact.message
+    contact.service_type = service_type if service_type else contact.service_type
+    
+    await db.commit()
+    await db.refresh(contact)
+    
+    return {"message": "Contact updated successfully", "contact": contact}
 
 # Package Booking Management
 @router.get("/admin/bookings", response_class=HTMLResponse)
@@ -1260,22 +1641,7 @@ async def delete_offer(
     
     return {"message": "Offer deleted successfully"}
 
-@router.post("/admin/contacts/mark-all-read")
-async def mark_all_contacts_read(
-    session_token: Optional[str] = Cookie(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """Mark all contacts as read"""
-    admin = await get_current_admin_object(session_token, db)
-    if not admin:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    await db.execute(
-        update(Contact).values(is_read=True).where(Contact.is_read == False)
-    )
-    await db.commit()
-    
-    return {"message": "All contacts marked as read"}
+
 
 @router.get("/admin/api/treatment-types")
 async def get_treatment_types_api(

@@ -11,6 +11,10 @@
                 Contact Inquiries
             </h1>
             <div class="btn-group">
+                <button class="btn btn-success" id="bulkMarkReadBtn" onclick="markSelectedAsRead()" style="display: none;">
+                    <i class="fas fa-check-double me-1"></i>
+                    Mark Selected as Read (<span id="selectedCount">0</span>)
+                </button>
                 <button class="btn btn-outline-secondary" onclick="markAllAsRead()">
                     <i class="fas fa-check-double me-1"></i>
                     Mark All Read
@@ -89,6 +93,12 @@
                             <option value="new">New</option>
                             <option value="read">Read</option>
                         </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="date" class="form-control form-control-sm" id="dateFromFilter" placeholder="From Date">
+                    </div>
+                    <div class="col-auto">
+                        <input type="date" class="form-control form-control-sm" id="dateToFilter" placeholder="To Date">
                     </div>
                     <div class="col-auto">
                         <div class="input-group">
@@ -170,12 +180,18 @@
                                         onclick="viewContactDetails({{ contact.id }})">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                <button type="button" 
+                                        class="btn btn-outline-success" 
+                                        title="Edit Contact"
+                                        onclick="editContact({{ contact.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button type="button" 
                                             class="btn btn-outline-secondary dropdown-toggle" 
                                             data-bs-toggle="dropdown" 
-                                            title="Change Status">
-                                        <i class="fas fa-tag"></i>
+                                            title="More Actions">
+                                        <i class="fas fa-ellipsis-v"></i>
                                     </button>
                                     <ul class="dropdown-menu">
                                         {% if not contact.is_read %}
@@ -264,6 +280,78 @@
     </div>
 </div>
 
+<!-- Edit Contact Modal -->
+<div class="modal fade" id="editContactModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>
+                    Edit Contact
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editContactForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editName" class="form-label">Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="editName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editEmail" class="form-label">Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="editEmail" name="email" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editPhone" class="form-label">Phone</label>
+                                <input type="tel" class="form-control" id="editPhone" name="phone">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="editServiceType" class="form-label">Service Type</label>
+                                <select class="form-select" id="editServiceType" name="service_type">
+                                    <option value="">Select service type</option>
+                                    <option value="general_inquiry">General Inquiry</option>
+                                    <option value="appointment">Appointment Request</option>
+                                    <option value="treatment_info">Treatment Information</option>
+                                    <option value="pricing">Pricing Information</option>
+                                    <option value="support">Technical Support</option>
+                                    <option value="feedback">Feedback</option>
+                                    <option value="complaint">Complaint</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editSubject" class="form-label">Subject</label>
+                        <input type="text" class="form-control" id="editSubject" name="subject">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editMessage" class="form-label">Message</label>
+                        <textarea class="form-control" id="editMessage" name="message" rows="4"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 
 {% endblock %}
 
@@ -278,33 +366,107 @@ document.getElementById('statusFilter').addEventListener('change', function(e) {
     filterContacts();
 });
 
+document.getElementById('dateFromFilter').addEventListener('change', function(e) {
+    filterContacts();
+});
+
+document.getElementById('dateToFilter').addEventListener('change', function(e) {
+    filterContacts();
+});
+
 function filterContacts() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const statusFilter = document.getElementById('statusFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
     const rows = document.querySelectorAll('tbody tr');
     
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
         const status = row.dataset.status;
         
+        // Extract date from the row (assuming date is in the 5th column)
+        const dateCell = row.cells[4];
+        const dateText = dateCell ? dateCell.textContent.trim().split('\n')[0] : '';
+        const rowDate = new Date(dateText);
+        
         const matchesSearch = text.includes(searchTerm);
         const matchesStatus = !statusFilter || status === statusFilter;
         
-        if (matchesSearch && matchesStatus) {
+        let matchesDateFrom = true;
+        let matchesDateTo = true;
+        
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            matchesDateFrom = rowDate >= fromDate;
+        }
+        
+        if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999); // Include the full day
+            matchesDateTo = rowDate <= toDate;
+        }
+        
+        if (matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
         }
     });
+    
+    // Update selected count when filtering
+    updateSelectedCount();
 }
 
 // Select all functionality
 document.getElementById('selectAll').addEventListener('change', function() {
     const checkboxes = document.querySelectorAll('.contact-checkbox');
     checkboxes.forEach(checkbox => {
-        checkbox.checked = this.checked;
+        if (checkbox.closest('tr').style.display !== 'none') {
+            checkbox.checked = this.checked;
+        }
     });
+    updateSelectedCount();
 });
+
+// Add event listeners to individual checkboxes
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('contact-checkbox')) {
+        updateSelectedCount();
+    }
+});
+
+// Function to update selected count and show/hide bulk actions
+function updateSelectedCount() {
+    const visibleCheckboxes = Array.from(document.querySelectorAll('.contact-checkbox'))
+        .filter(cb => cb.closest('tr').style.display !== 'none');
+    const selectedCheckboxes = visibleCheckboxes.filter(cb => cb.checked);
+    const count = selectedCheckboxes.length;
+    
+    document.getElementById('selectedCount').textContent = count;
+    
+    const bulkBtn = document.getElementById('bulkMarkReadBtn');
+    if (count > 0) {
+        bulkBtn.style.display = 'inline-block';
+    } else {
+        bulkBtn.style.display = 'none';
+    }
+    
+    // Update "select all" checkbox state
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (visibleCheckboxes.length === 0) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = false;
+    } else if (selectedCheckboxes.length === visibleCheckboxes.length) {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = true;
+    } else if (selectedCheckboxes.length > 0) {
+        selectAllCheckbox.indeterminate = true;
+    } else {
+        selectAllCheckbox.indeterminate = false;
+        selectAllCheckbox.checked = false;
+    }
+}
 
 // View contact details
 function viewContactDetails(contactId) {
@@ -453,6 +615,53 @@ function deleteContact(contactId) {
     }
 }
 
+// Mark selected contacts as read
+function markSelectedAsRead() {
+    const selectedCheckboxes = Array.from(document.querySelectorAll('.contact-checkbox:checked'))
+        .filter(cb => cb.closest('tr').style.display !== 'none');
+    
+    if (selectedCheckboxes.length === 0) {
+        alert('Please select contacts to mark as read');
+        return;
+    }
+    
+    const contactIds = selectedCheckboxes.map(cb => parseInt(cb.value));
+    
+    if (confirm(`Mark ${contactIds.length} selected contacts as read?`)) {
+        const button = document.getElementById('bulkMarkReadBtn');
+        const originalText = button.innerHTML;
+        
+        // Show loading state
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Marking as read...';
+        button.disabled = true;
+        
+        fetch('/admin/contacts/bulk-mark-read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ contact_ids: contactIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                location.reload();
+            } else {
+                alert('Error marking contacts as read');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error marking contacts as read');
+        })
+        .finally(() => {
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
 // Mark all as read
 function markAllAsRead() {
     if (confirm('Mark all visible contacts as read?')) {
@@ -479,9 +688,104 @@ function markAllAsRead() {
 
 // Export contacts
 function exportContacts() {
-    console.log('Exporting contacts');
-    // Implementation would generate and download CSV/Excel file
-    alert('Contacts exported successfully!');
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+    button.disabled = true;
+    
+    // Build export URL with current filters
+    const searchTerm = document.getElementById('searchInput').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
+    
+    const params = new URLSearchParams();
+    params.append('export', 'true');
+    
+    if (searchTerm) params.append('search', searchTerm);
+    if (statusFilter) params.append('status', statusFilter);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    // Create a temporary link to trigger download
+    const link = document.createElement('a');
+    link.href = `/admin/contacts?${params.toString()}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 2000);
 }
+
+// Edit contact
+function editContact(contactId) {
+    // First, fetch the contact details
+    fetch(`/admin/contacts/${contactId}`)
+    .then(response => response.json())
+    .then(contact => {
+        // Populate the edit form
+        document.getElementById('editName').value = contact.name || '';
+        document.getElementById('editEmail').value = contact.email || '';
+        document.getElementById('editPhone').value = contact.phone || '';
+        document.getElementById('editSubject').value = contact.subject || '';
+        document.getElementById('editMessage').value = contact.message || '';
+        document.getElementById('editServiceType').value = contact.service_type || '';
+        
+        // Store contact ID for form submission
+        document.getElementById('editContactForm').dataset.contactId = contactId;
+        
+        // Show modal
+        new bootstrap.Modal(document.getElementById('editContactModal')).show();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error loading contact details for editing');
+    });
+}
+
+// Handle edit form submission
+document.getElementById('editContactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const contactId = this.dataset.contactId;
+    const formData = new FormData(this);
+    
+    // Show loading
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    submitBtn.disabled = true;
+    
+    fetch(`/admin/contacts/${contactId}`, {
+        method: 'PUT',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            // Close modal and reload page
+            bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
+            location.reload();
+        } else {
+            alert('Error updating contact');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating contact');
+    })
+    .finally(() => {
+        // Reset button
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+});
 </script>
 {% endblock %}

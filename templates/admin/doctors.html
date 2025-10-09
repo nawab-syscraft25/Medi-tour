@@ -21,17 +21,68 @@
 <!-- Doctors Table -->
 <div class="card">
     <div class="card-header">
-        <div class="row align-items-center">
+        <div class="row align-items-center mb-3">
             <div class="col">
-                <h5 class="card-title mb-0">All Doctors ({{ total }} total)</h5>
+                <h5 class="card-title mb-0">All Doctors (<span id="totalCount">{{ total }}</span> total)</h5>
             </div>
             <div class="col-auto">
-                <div class="input-group">
-                    <input type="text" class="form-control" placeholder="Search doctors..." id="searchInput">
-                    <button class="btn btn-outline-secondary" type="button">
-                        <i class="fas fa-search"></i>
-                    </button>
+                <button class="btn btn-success btn-sm" onclick="exportDoctors()">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+        
+        <!-- Filter Controls -->
+        <div class="row g-2">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search by name..." id="searchInput">
                 </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="specializationFilter">
+                    <option value="">All Specializations</option>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="hospitalFilter">
+                    <option value="">All Hospitals</option>
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="col-md-1">
+                <select class="form-select form-select-sm" id="experienceFilter">
+                    <option value="">All Exp.</option>
+                    <option value="1">1+ Years</option>
+                    <option value="5">5+ Years</option>
+                    <option value="10">10+ Years</option>
+                    <option value="15">15+ Years</option>
+                    <option value="20">20+ Years</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <select class="form-select form-select-sm" id="ratingFilter">
+                    <option value="">All Ratings</option>
+                    <option value="5">5 Stars</option>
+                    <option value="4">4+ Stars</option>
+                    <option value="3">3+ Stars</option>
+                    <option value="2">2+ Stars</option>
+                    <option value="1">1+ Stars</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="available">Available</option>
+                    <option value="unavailable">Unavailable</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()" title="Clear all filters">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -55,7 +106,14 @@
                 </thead>
                 <tbody>
                     {% for doctor in doctors %}
-                    <tr>
+                    <tr data-name="{{ doctor.name|lower }}"
+                        data-specialization="{{ doctor.specialization|lower if doctor.specialization else '' }}"
+                        data-hospital="{{ doctor.hospital.name|lower if doctor.hospital else '' }}"
+                        data-hospital-location="{{ doctor.hospital.location|lower if doctor.hospital else '' }}"
+                        data-experience="{{ doctor.experience_years if doctor.experience_years else 0 }}"
+                        data-rating="{{ doctor.rating if doctor.rating else 0 }}"
+                        data-status="{{ 'available' if doctor.is_active else 'unavailable' }}"
+                        data-qualification="{{ doctor.qualification|lower if doctor.qualification else '' }}">
                         <!-- <td><strong>#{{ doctor.id }}</strong></td> -->
                         <td>
                             <div class="d-flex align-items-center">
@@ -208,20 +266,171 @@
 
 {% block extra_scripts %}
 <script>
-// Search functionality
-document.getElementById('searchInput').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
+// Initialize filters when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    populateFilterOptions();
+    setupFilterListeners();
+});
+
+// Setup event listeners for all filters
+function setupFilterListeners() {
+    document.getElementById('searchInput').addEventListener('input', filterDoctors);
+    document.getElementById('specializationFilter').addEventListener('change', filterDoctors);
+    document.getElementById('hospitalFilter').addEventListener('change', filterDoctors);
+    document.getElementById('experienceFilter').addEventListener('change', filterDoctors);
+    document.getElementById('ratingFilter').addEventListener('change', filterDoctors);
+    document.getElementById('statusFilter').addEventListener('change', filterDoctors);
+}
+
+// Populate filter dropdown options from existing data
+function populateFilterOptions() {
     const rows = document.querySelectorAll('tbody tr');
+    const specializations = new Set();
+    const hospitals = new Set();
     
     rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        if (text.includes(searchTerm)) {
+        // Get specialization
+        const specialization = row.dataset.specialization;
+        if (specialization && specialization.trim()) {
+            specializations.add(specialization.trim());
+        }
+        
+        // Get hospital
+        const hospital = row.dataset.hospital;
+        if (hospital && hospital.trim()) {
+            hospitals.add(hospital.trim());
+        }
+    });
+    
+    // Populate specialization filter
+    const specializationFilter = document.getElementById('specializationFilter');
+    const sortedSpecializations = Array.from(specializations).sort();
+    sortedSpecializations.forEach(spec => {
+        const option = document.createElement('option');
+        option.value = spec;
+        option.textContent = spec.charAt(0).toUpperCase() + spec.slice(1);
+        specializationFilter.appendChild(option);
+    });
+    
+    // Populate hospital filter
+    const hospitalFilter = document.getElementById('hospitalFilter');
+    const sortedHospitals = Array.from(hospitals).sort();
+    sortedHospitals.forEach(hospital => {
+        const option = document.createElement('option');
+        option.value = hospital;
+        option.textContent = hospital.charAt(0).toUpperCase() + hospital.slice(1);
+        hospitalFilter.appendChild(option);
+    });
+}
+
+// Main filtering function
+function filterDoctors() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const specializationFilter = document.getElementById('specializationFilter').value.toLowerCase();
+    const hospitalFilter = document.getElementById('hospitalFilter').value.toLowerCase();
+    const experienceFilter = document.getElementById('experienceFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const specialization = row.dataset.specialization || '';
+        const hospital = row.dataset.hospital || '';
+        const hospitalLocation = row.dataset.hospitalLocation || '';
+        const qualification = row.dataset.qualification || '';
+        const experience = parseInt(row.dataset.experience || '0');
+        const rating = parseFloat(row.dataset.rating || '0');
+        const status = row.dataset.status || '';
+        
+        // Check all filter conditions
+        const matchesSearch = !searchTerm || 
+                            name.includes(searchTerm) || 
+                            specialization.includes(searchTerm) ||
+                            hospital.includes(searchTerm) ||
+                            hospitalLocation.includes(searchTerm) ||
+                            qualification.includes(searchTerm);
+        
+        const matchesSpecialization = !specializationFilter || 
+                                    specialization === specializationFilter;
+        
+        const matchesHospital = !hospitalFilter || hospital === hospitalFilter;
+        
+        const matchesExperience = !experienceFilter || 
+                                experience >= parseInt(experienceFilter);
+        
+        const matchesRating = !ratingFilter || rating >= parseFloat(ratingFilter);
+        
+        const matchesStatus = !statusFilter || status === statusFilter;
+        
+        // Show/hide row based on all filters
+        if (matchesSearch && matchesSpecialization && matchesHospital && 
+            matchesExperience && matchesRating && matchesStatus) {
             row.style.display = '';
+            visibleCount++;
         } else {
             row.style.display = 'none';
         }
     });
-});
+    
+    // Update total count
+    document.getElementById('totalCount').textContent = visibleCount;
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('specializationFilter').value = '';
+    document.getElementById('hospitalFilter').value = '';
+    document.getElementById('experienceFilter').value = '';
+    document.getElementById('ratingFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    filterDoctors();
+}
+
+// Export doctors with current filters
+function exportDoctors() {
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+    button.disabled = true;
+    
+    // Build export URL with current filters
+    const searchTerm = document.getElementById('searchInput').value;
+    const specializationFilter = document.getElementById('specializationFilter').value;
+    const hospitalFilter = document.getElementById('hospitalFilter').value;
+    const experienceFilter = document.getElementById('experienceFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const params = new URLSearchParams();
+    params.append('export', 'true');
+    
+    if (searchTerm) params.append('search', searchTerm);
+    if (specializationFilter) params.append('specialization', specializationFilter);
+    if (hospitalFilter) params.append('hospital', hospitalFilter);
+    if (experienceFilter) params.append('experience', experienceFilter);
+    if (ratingFilter) params.append('rating', ratingFilter);
+    if (statusFilter) params.append('status', statusFilter);
+    
+    // Create a temporary link to trigger download  
+    const link = document.createElement('a');
+    link.href = `/admin/doctors?${params.toString()}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 2000);
+}
 
 // View doctor details
 function viewDoctorDetails(doctorId) {
