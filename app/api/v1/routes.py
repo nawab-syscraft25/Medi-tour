@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
+import os
+import uuid
+from pathlib import Path
 from app.db import get_db
 from app import models, schemas
 from app.dependencies import get_current_admin, get_current_user
@@ -1663,12 +1666,181 @@ async def delete_treatment(
 
 
 # Package Booking endpoints
-@router.post("/bookings", response_model=schemas.PackageBookingResponse)
+@router.post(
+    "/bookings", 
+    response_model=schemas.PackageBookingResponse,
+    summary="Create Booking with File Upload",
+    description="""
+    Create a new booking with optional medical file upload.
+    
+    **IMPORTANT:** This endpoint requires `multipart/form-data` for file uploads.
+    For JSON-only requests (no files), use `/bookings/json` instead.
+    
+    **Content-Type:** multipart/form-data
+    **Supported File Types:** PDF, JPG, PNG, TXT, DOC, DOCX
+    **Max File Size:** 10MB
+    
+    **✅ Correct JavaScript Example:**
+    ```javascript
+    const formData = new FormData();
+    formData.append('first_name', 'John');
+    formData.append('last_name', 'Doe');
+    formData.append('email', 'john@example.com');
+    formData.append('mobile_no', '+1234567890');
+    formData.append('treatment_id', '1'); // Optional
+    formData.append('medical_history_file', fileInput.files[0]); // File object
+    
+    fetch('/api/v1/bookings', {
+        method: 'POST',
+        body: formData // NO Content-Type header needed
+    });
+    ```
+    
+    **❌ Wrong - Don't send JSON to this endpoint:**
+    ```javascript
+    // This will fail - use /bookings/json instead
+    fetch('/api/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({...}) // This will fail
+    });
+    ```
+    
+    **Example using curl:**
+    ```bash
+    curl -X POST "http://localhost:8001/api/v1/bookings" \\
+         -F "first_name=John" \\
+         -F "last_name=Doe" \\
+         -F "email=john@example.com" \\
+         -F "mobile_no=+1234567890" \\
+         -F "medical_history_file=@/path/to/medical_file.pdf"
+    ```
+    """,
+    tags=["bookings", "file-upload"]
+)
 async def create_booking(
+    first_name: str = Form(..., description="Patient's first name"),
+    last_name: str = Form(..., description="Patient's last name"),
+    email: str = Form(..., description="Patient's email address"),
+    mobile_no: str = Form(..., description="Patient's mobile number"),
+    treatment_id: Optional[int] = Form(None, description="Selected treatment ID (optional)"),
+    budget: Optional[str] = Form(None, description="Budget range (e.g., '10k-20k')"),
+    doctor_preference: Optional[str] = Form(None, description="Preferred doctor name"),
+    hospital_preference: Optional[str] = Form(None, description="Preferred hospital name"),
+    user_query: Optional[str] = Form(None, description="Additional queries or requirements"),
+    travel_assistant: Optional[bool] = Form(False, description="Request travel assistance"),
+    stay_assistant: Optional[bool] = Form(False, description="Request accommodation assistance"),
+    personal_assistant: Optional[bool] = Form(False, description="Request personal assistant"),
+    medical_history_file: Optional[UploadFile] = File(
+        None, 
+        description="📁 Upload medical history file (PDF, JPG, PNG, TXT, DOC, DOCX - Max 10MB)"
+    ),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new booking with optional medical file upload"""
+    
+    medical_file_path = None
+    
+    # Handle medical file upload if provided
+    if medical_history_file and medical_history_file.filename and medical_history_file.size > 0:
+        # Validate file type
+        allowed_types = {
+            'application/pdf': 'pdf',
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/jpg': 'jpg',
+            'text/plain': 'txt',
+            'application/msword': 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+        }
+        
+        # Check content type
+        if medical_history_file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File type '{medical_history_file.content_type}' not allowed. Supported types: {', '.join(allowed_types.values())}"
+            )
+        
+        # Check file size (max 10MB) using the size attribute first
+        if medical_history_file.size and medical_history_file.size > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=400, detail="File size too large. Maximum size is 10MB")
+        
+        # Read file content
+        content = await medical_history_file.read()
+        
+        # Double-check file size after reading
+        if len(content) > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=400, detail="File size too large. Maximum size is 10MB")
+        
+        # Ensure we have actual content
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = Path("media/medical")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = allowed_types[medical_history_file.content_type]
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = upload_dir / unique_filename
+        
+        # Save file using the already read content
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        
+        medical_file_path = str(file_path)
+        print(f"✅ File uploaded successfully: {medical_file_path} ({len(content)} bytes)")
+    
+    # Create booking object
+    booking_data = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "mobile_no": mobile_no,
+        "treatment_id": treatment_id,
+        "budget": budget,
+        "medical_history_file": medical_file_path,
+        "doctor_preference": doctor_preference,
+        "hospital_preference": hospital_preference,
+        "user_query": user_query,
+        "travel_assistant": travel_assistant,
+        "stay_assistant": stay_assistant,
+        "personal_assistant": personal_assistant
+    }
+    
+    db_booking = models.PackageBooking(**booking_data)
+    db.add(db_booking)
+    await db.commit()
+    await db.refresh(db_booking)
+    return db_booking
+
+
+@router.post(
+    "/bookings/json", 
+    response_model=schemas.PackageBookingResponse,
+    summary="Create Booking (JSON Only)",
+    description="""
+    Create a new booking using JSON data (no file upload support).
+    This is a fallback endpoint for legacy clients that send JSON.
+    
+    **Content-Type:** application/json
+    
+    **For new implementations, use `/bookings` with multipart/form-data for file upload support.**
+    """,
+    tags=["bookings", "json", "legacy"]
+)
+async def create_booking_json(
     booking: schemas.PackageBookingCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    db_booking = models.PackageBooking(**booking.model_dump())
+    """Create a new booking using JSON data (no file upload)"""
+    
+    # Convert Pydantic model to dict
+    booking_data = booking.model_dump()
+    
+    # Create booking object
+    db_booking = models.PackageBooking(**booking_data)
     db.add(db_booking)
     await db.commit()
     await db.refresh(db_booking)
@@ -1700,6 +1872,35 @@ async def get_booking(booking_id: int, db: AsyncSession = Depends(get_db)):
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     return booking
+
+
+@router.get("/bookings/{booking_id}/medical-file")
+async def download_booking_medical_file(
+    booking_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Download medical file for a booking"""
+    result = await db.execute(select(models.PackageBooking).where(models.PackageBooking.id == booking_id))
+    booking = result.scalar_one_or_none()
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    if not booking.medical_history_file:
+        raise HTTPException(status_code=404, detail="No medical file found for this booking")
+    
+    file_path = Path(booking.medical_history_file)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Medical file not found on server")
+    
+    # Get original filename or generate one
+    filename = f"booking_{booking_id}_medical_file{file_path.suffix}"
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type='application/octet-stream'
+    )
 
 
 # Dropdown/Filter Data Endpoints
@@ -2592,96 +2793,6 @@ async def get_featured_stories(
     stories = result.scalars().all()
     
     return stories
-
-
-# ================================
-# APPOINTMENT ENDPOINTS
-# ================================
-
-@router.post("/appointments", response_model=schemas.AppointmentResponse)
-async def create_appointment(
-    appointment: schemas.AppointmentCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a new appointment"""
-    db_appointment = models.Appointment(**appointment.model_dump())
-    db.add(db_appointment)
-    await db.commit()
-    await db.refresh(db_appointment)
-    return db_appointment
-
-
-@router.get("/appointments", response_model=List[schemas.AppointmentResponse])
-async def get_appointments(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    doctor_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get all appointments with filtering"""
-    query = select(models.Appointment)
-    
-    filters = []
-    if doctor_id:
-        filters.append(models.Appointment.doctor_id == doctor_id)
-    if status:
-        filters.append(models.Appointment.status == status)
-    
-    if filters:
-        query = query.where(and_(*filters))
-    
-    query = query.offset(skip).limit(limit).order_by(models.Appointment.created_at.desc())
-    
-    result = await db.execute(query)
-    return result.scalars().all()
-
-
-@router.get("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
-async def get_appointment(appointment_id: int, db: AsyncSession = Depends(get_db)):
-    """Get a specific appointment by ID"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    return appointment
-
-
-@router.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
-async def update_appointment(
-    appointment_id: int,
-    appointment_update: schemas.AppointmentUpdate,
-    db: AsyncSession = Depends(get_db)
-):
-    """Update an existing appointment"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    update_data = appointment_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(appointment, field, value)
-    
-    await db.commit()
-    await db.refresh(appointment)
-    return appointment
-
-
-@router.delete("/appointments/{appointment_id}")
-async def delete_appointment(
-    appointment_id: int,
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete an appointment"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    await db.delete(appointment)
-    await db.commit()
-    return {"message": "Appointment deleted successfully"}
 
 
 # ================================

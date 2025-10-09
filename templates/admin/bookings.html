@@ -12,16 +12,7 @@
     <p class="page-subtitle">Manage and track all package booking requests from patients.</p>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div></div>
-    <div class="btn-group">
-        <button class="btn btn-primary" onclick="exportBookings()">
-            <i class="fas fa-download me-1"></i>
-            Export Data
-        </button>
-    </div>
-</div>
-</div>
+
 
 <!-- Booking Statistics -->
 <div class="statistics m-2">
@@ -93,30 +84,37 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label for="filter_days" class="form-label">Time Period</label>
-                <select name="filter_days" id="filter_days" class="form-select">
-                    <option value="">All Time</option>
-                    <option value="1" {% if filter_days==1 %}selected{% endif %}>Last 24 Hours</option>
-                    <option value="7" {% if filter_days==7 %}selected{% endif %}>Last 7 Days</option>
-                    <option value="30" {% if filter_days==30 %}selected{% endif %}>Last 30 Days</option>
-                    <option value="90" {% if filter_days==90 %}selected{% endif %}>Last 90 Days</option>
-                </select>
+            <div class="col-lg-2 col-md-3">
+                <label for="from_date" class="form-label">From Date</label>
+                <input type="date" name="from_date" id="from_date" class="form-control" value="{{ from_date or '' }}">
             </div>
-            <div class="col-md-6">
-                <label for="search" class="form-label">Search</label>
+            <div class="col-lg-2 col-md-3">
+                <label for="to_date" class="form-label">To Date</label>
+                <input type="date" name="to_date" id="to_date" class="form-control" value="{{ to_date or '' }}">
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <label for="search" class="form-label">Search Treatment</label>
                 <input type="text" name="search" id="search" class="form-control"
-                    placeholder="Search by name, email, phone, or query..." value="{{ search }}">
+                    placeholder="Search by treatment, type, or 'online consultancy'..." value="{{ search }}">
+                <div class="form-text">Search for specific treatments by name, medical type, or 'online consultancy'</div>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary me-2">
-                    <i class="fas fa-search me-1"></i>
-                    Filter
-                </button>
-                <a href="/admin/bookings" class="btn btn-outline-secondary">
-                    <i class="fas fa-times me-1"></i>
-                    Clear
-                </a>
+            <div class="col-lg-4 col-md-12">
+                <label class="form-label d-none d-lg-block">&nbsp;</label>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>
+                        Filter
+                    </button>
+                    <a href="/admin/bookings" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>
+                        Clear
+                    </a>
+                    <button type="button" class="btn btn-success" onclick="exportBookings(event)" 
+                            title="Export filtered bookings to CSV">
+                        <i class="fas fa-download me-1"></i>
+                        Export
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -161,6 +159,9 @@
                             {% if booking.treatment.treatment_type %}
                             <br><small class="text-muted">{{ booking.treatment.treatment_type }}</small>
                             {% endif %}
+                            {% elif booking.doctor_preference and booking.doctor_preference.strip() and booking.doctor_preference != 'null' %}
+                            <span class="badge bg-success">Online Consultancy</span>
+                            <br><small class="text-muted">Doctor: {{ booking.doctor_preference }}</small>
                             {% else %}
                             <span class="text-muted">No treatment selected</span>
                             {% endif %}
@@ -225,7 +226,7 @@
                 {% if page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="?page={{ page - 1 }}{% if filter_days %}&filter_days={{ filter_days }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
+                        href="?page={{ page - 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
                         <i class="fas fa-chevron-left"></i>
                     </a>
                 </li>
@@ -238,7 +239,7 @@
                 </li>
                 {% elif p <= 3 or p> total_pages - 3 or (p >= page - 2 and p <= page + 2) %} <li class="page-item">
                         <a class="page-link"
-                            href="?page={{ p }}{% if filter_days %}&filter_days={{ filter_days }}{% endif %}{% if search %}&search={{ search }}{% endif %}">{{
+                            href="?page={{ p }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">{{
                             p }}</a>
                         </li>
                         {% elif p == 4 or p == total_pages - 3 %}
@@ -250,7 +251,7 @@
 
                         {% if page < total_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="?page={{ page + 1 }}{% if filter_days %}&filter_days={{ filter_days }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
+                                href="?page={{ page + 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                             </li>
@@ -262,7 +263,7 @@
         <div class="text-center py-5">
             <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
             <h5 class="text-muted">No Bookings Found</h5>
-            {% if search or filter_days %}
+            {% if search or from_date or to_date %}
             <p class="text-muted">Try adjusting your search criteria or filters.</p>
             <a href="/admin/bookings" class="btn btn-outline-primary">
                 <i class="fas fa-times me-1"></i>
@@ -340,27 +341,42 @@
                 <div class="col-md-6">
                     <h6 class="text-primary">Treatment & Preferences</h6>
                     <table class="table table-sm">
-                        <tr><td><strong>Treatment:</strong></td><td>${booking.treatment ? booking.treatment.name : 'Not selected'}</td></tr>
-                        <tr><td><strong>Type:</strong></td><td>${booking.treatment ? booking.treatment.treatment_type || 'N/A' : 'N/A'}</td></tr>
+                        <tr><td><strong>Treatment:</strong></td><td>${booking.treatment ? booking.treatment.name : (booking.doctor_preference && booking.doctor_preference.trim() && booking.doctor_preference !== 'null' ? 'Online Consultancy' : 'Not selected')}</td></tr>
+                        <tr><td><strong>Type:</strong></td><td>${booking.treatment ? booking.treatment.treatment_type || 'N/A' : (booking.doctor_preference && booking.doctor_preference.trim() && booking.doctor_preference !== 'null' ? 'Virtual Consultation' : 'N/A')}</td></tr>
                         <tr><td><strong>Doctor Pref:</strong></td><td>${booking.doctor_preference || 'No preference'}</td></tr>
                         <tr><td><strong>Hospital Pref:</strong></td><td>${booking.hospital_preference || 'No preference'}</td></tr>
                     </table>
                 </div>
             </div>
-            <div class="row">
-                <div class="col-md-6">
+            <div class="row mt-3">
+                <div class="col-12">
                     <h6 class="text-primary">Additional Services</h6>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
                         ${booking.travel_assistant ? '<span class="badge bg-info"><i class="fas fa-plane me-1"></i>Travel Assistant</span>' : ''}
                         ${booking.stay_assistant ? '<span class="badge bg-warning"><i class="fas fa-bed me-1"></i>Stay Assistant</span>' : ''}
                         ${booking.personal_assistant ? '<span class="badge bg-success"><i class="fas fa-user-tie me-1"></i>Personal Assistant</span>' : ''}
-                        ${booking.medical_history_file ? '<span class="badge bg-secondary"><i class="fas fa-file-medical me-1"></i>Medical History</span>' : ''}
+                        ${booking.medical_history_file && booking.medical_history_file !== 'null' ? '<span class="badge bg-secondary"><i class="fas fa-file-medical me-1"></i>Medical History</span>' : ''}
+                        ${!booking.travel_assistant && !booking.stay_assistant && !booking.personal_assistant && (!booking.medical_history_file || booking.medical_history_file === 'null') ? '<span class="text-muted">No additional services requested</span>' : ''}
                     </div>
-                    ${booking.medical_history_file ? `<div class="mt-2"><small class="text-muted">File: ${booking.medical_history_file}</small></div>` : ''}
+                    ${booking.medical_history_file && booking.medical_history_file !== 'null' ? `
+                        <div class="mb-3">
+                            <h6 class="text-primary mb-2">Medical History File</h6>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadMedicalFile('${booking.medical_history_file}', ${booking.id})">
+                                <i class="fas fa-download me-1"></i>
+                                Download ${booking.medical_history_file ? (booking.medical_history_file.includes('/') ? booking.medical_history_file.split('/').pop() : booking.medical_history_file) : 'Medical File'}
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
+            </div>
+            <div class="row">
                 <div class="col-md-6">
                     <h6 class="text-primary">Booking Date</h6>
-                    <p>${booking.created_at ? new Date(booking.created_at).toLocaleString() : 'N/A'}</p>
+                    <p class="mb-0">${booking.created_at ? new Date(booking.created_at).toLocaleString() : 'N/A'}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-primary">Booking ID</h6>
+                    <p class="mb-0">#${booking.id}</p>
                 </div>
             </div>
             ${booking.user_query ? `
@@ -406,10 +422,78 @@
     }
 
     // Export bookings
-    function exportBookings() {
+    function exportBookings(event) {
+        event.preventDefault();
+        const button = event.target.closest('button');
+        const originalText = button.innerHTML;
+        
+        // Show loading state
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+        button.disabled = true;
+        
         const params = new URLSearchParams(window.location.search);
         params.append('export', 'true');
-        window.open(`/admin/bookings?${params.toString()}`, '_blank');
+        
+        // Create a temporary link to trigger download
+        const link = document.createElement('a');
+        link.href = `/admin/bookings?${params.toString()}`;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Reset button after a short delay
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 2000);
+    }
+
+    // Download medical history file
+    async function downloadMedicalFile(filePath, bookingId) {
+        if (!filePath || filePath === 'null') {
+            alert('No medical history file available for download.');
+            return;
+        }
+        
+        try {
+            console.log(`Attempting to download medical file for booking ${bookingId}, file path: ${filePath}`);
+            
+            // Use the secure backend endpoint for file download
+            const downloadUrl = `/admin/bookings/${bookingId}/download-medical-file`;
+            
+            // First check if the file exists by making a HEAD request
+            const checkResponse = await fetch(downloadUrl, { method: 'HEAD' });
+            
+            if (!checkResponse.ok) {
+                if (checkResponse.status === 404) {
+                    alert('Medical history file not found on server.');
+                } else if (checkResponse.status === 401) {
+                    alert('Authentication required. Please refresh the page and try again.');
+                } else {
+                    alert(`Server error: ${checkResponse.status}. Please try again.`);
+                }
+                return;
+            }
+            
+            // Extract just the filename from the full path for download
+            const filename = filePath.includes('/') ? filePath.split('/').pop() : filePath;
+            
+            // Create temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log(`✅ Download initiated for file: ${filename}`);
+            
+        } catch (error) {
+            alert('Failed to download medical history file. Please check the console for details.');
+            console.error('Download error:', error);
+        }
     }
 </script>
 {% endblock %}

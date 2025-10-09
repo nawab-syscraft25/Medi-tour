@@ -4,11 +4,11 @@ Handles HTML pages for admin dashboard using Jinja2 templates
 """
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, status, Cookie, Response, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, update, delete
+from sqlalchemy import select, func, desc, update, delete, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 import hashlib
@@ -17,6 +17,8 @@ from jose import jwt
 import json
 import os
 import uuid
+import csv
+import io
 from datetime import datetime, timedelta
 
 from app.dependencies import get_db
@@ -716,15 +718,34 @@ async def mark_all_contacts_read(
 async def admin_bookings(
     request: Request,
     page: int = 1,
-    filter_days: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     search: Optional[str] = None,
+    export: Optional[str] = None,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Package booking management page with time filters"""
+    """Package booking management page with date range and treatment type filters"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
+    
+    # Parse date parameters
+    from_date_obj = None
+    to_date_obj = None
+    
+    if from_date and from_date.strip():
+        try:
+            from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
+        except ValueError:
+            from_date_obj = None
+    
+    if to_date and to_date.strip():
+        try:
+            # Set to end of day for to_date
+            to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+        except ValueError:
+            to_date_obj = None
     
     limit = 15
     offset = (page - 1) * limit
@@ -732,20 +753,31 @@ async def admin_bookings(
     # Build query
     query = select(PackageBooking).options(selectinload(PackageBooking.treatment))
     
-    # Apply time filters
-    if filter_days:
-        cutoff_date = datetime.utcnow() - timedelta(days=filter_days)
-        query = query.where(PackageBooking.created_at >= cutoff_date)
+    # Apply date range filters
+    if from_date_obj:
+        query = query.where(PackageBooking.created_at >= from_date_obj)
+    if to_date_obj:
+        query = query.where(PackageBooking.created_at <= to_date_obj)
     
-    # Apply search filter
+    # Apply treatment type search filter
     if search:
         search_term = f"%{search.strip()}%"
-        query = query.where(
-            (PackageBooking.first_name.ilike(search_term)) |
-            (PackageBooking.last_name.ilike(search_term)) |
-            (PackageBooking.email.ilike(search_term)) |
-            (PackageBooking.mobile_no.ilike(search_term)) |
-            (PackageBooking.user_query.ilike(search_term))
+        query = query.join(Treatment, PackageBooking.treatment_id == Treatment.id, isouter=True).where(
+            (Treatment.name.ilike(search_term)) |
+            (Treatment.treatment_type.ilike(search_term)) |
+            # Also match "online consultancy" for bookings with doctor preference but no treatment
+            (and_(
+                PackageBooking.treatment_id.is_(None),
+                PackageBooking.doctor_preference.isnot(None),
+                PackageBooking.doctor_preference != 'null',
+                PackageBooking.doctor_preference != '',
+                or_(
+                    search_term.lower().find('online') != -1,
+                    search_term.lower().find('consultancy') != -1,
+                    search_term.lower().find('consultation') != -1,
+                    search_term.lower().find('virtual') != -1
+                ).self_group()
+            ))
         )
     
     # Add ordering and pagination
@@ -754,19 +786,110 @@ async def admin_bookings(
     result = await db.execute(query)
     bookings = result.scalars().all()
     
+    # Handle export request
+    if export == "true":
+        # For export, get all matching records without pagination
+        export_query = select(PackageBooking).options(selectinload(PackageBooking.treatment))
+        
+        # Apply same filters
+        if from_date_obj:
+            export_query = export_query.where(PackageBooking.created_at >= from_date_obj)
+        if to_date_obj:
+            export_query = export_query.where(PackageBooking.created_at <= to_date_obj)
+        if search:
+            search_term = f"%{search.strip()}%"
+            export_query = export_query.join(Treatment, PackageBooking.treatment_id == Treatment.id, isouter=True).where(
+                (Treatment.name.ilike(search_term)) |
+                (Treatment.treatment_type.ilike(search_term)) |
+                # Also match "online consultancy" for bookings with doctor preference but no treatment
+                (and_(
+                    PackageBooking.treatment_id.is_(None),
+                    PackageBooking.doctor_preference.isnot(None),
+                    PackageBooking.doctor_preference != 'null',
+                    PackageBooking.doctor_preference != '',  
+                    or_(
+                        search_term.lower().find('online') != -1,
+                        search_term.lower().find('consultancy') != -1,
+                        search_term.lower().find('consultation') != -1,
+                        search_term.lower().find('virtual') != -1
+                    ).self_group()
+                ))
+            )
+        
+        export_query = export_query.order_by(desc(PackageBooking.created_at))
+        export_result = await db.execute(export_query)
+        all_bookings = export_result.scalars().all()
+        
+        # Generate CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow([
+            'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 
+            'Treatment', 'Treatment Type', 'Budget', 'Doctor Preference', 
+            'Hospital Preference', 'Travel Assistant', 'Stay Assistant', 
+            'Personal Assistant', 'Medical History File', 'User Query', 
+            'Created Date'
+        ])
+        
+        # Write data
+        for booking in all_bookings:
+            writer.writerow([
+                booking.id,
+                booking.first_name,
+                booking.last_name,
+                booking.email,
+                booking.mobile_no,
+                booking.treatment.name if booking.treatment else 'Not selected',
+                booking.treatment.treatment_type if booking.treatment else 'N/A',
+                booking.budget or 'Not specified',
+                booking.doctor_preference or 'No preference',
+                booking.hospital_preference or 'No preference',
+                'Yes' if booking.travel_assistant else 'No',
+                'Yes' if booking.stay_assistant else 'No',
+                'Yes' if booking.personal_assistant else 'No',
+                booking.medical_history_file or 'None',
+                booking.user_query or 'None',
+                booking.created_at.strftime('%Y-%m-%d %H:%M:%S') if booking.created_at else 'N/A'
+            ])
+        
+        output.seek(0)
+        
+        # Create filename with current date
+        filename = f"bookings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Return CSV file
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
     # Get total count for pagination
     count_query = select(func.count(PackageBooking.id))
-    if filter_days:
-        cutoff_date = datetime.utcnow() - timedelta(days=filter_days)
-        count_query = count_query.where(PackageBooking.created_at >= cutoff_date)
+    if from_date_obj:
+        count_query = count_query.where(PackageBooking.created_at >= from_date_obj)
+    if to_date_obj:
+        count_query = count_query.where(PackageBooking.created_at <= to_date_obj)
     if search:
         search_term = f"%{search.strip()}%"
-        count_query = count_query.where(
-            (PackageBooking.first_name.ilike(search_term)) |
-            (PackageBooking.last_name.ilike(search_term)) |
-            (PackageBooking.email.ilike(search_term)) |
-            (PackageBooking.mobile_no.ilike(search_term)) |
-            (PackageBooking.user_query.ilike(search_term))
+        count_query = count_query.join(Treatment, PackageBooking.treatment_id == Treatment.id, isouter=True).where(
+            (Treatment.name.ilike(search_term)) |
+            (Treatment.treatment_type.ilike(search_term)) |
+            # Also match "online consultancy" for bookings with doctor preference but no treatment
+            (and_(
+                PackageBooking.treatment_id.is_(None),
+                PackageBooking.doctor_preference.isnot(None),
+                PackageBooking.doctor_preference != 'null',
+                PackageBooking.doctor_preference != '',
+                or_(
+                    search_term.lower().find('online') != -1,
+                    search_term.lower().find('consultancy') != -1,
+                    search_term.lower().find('consultation') != -1,
+                    search_term.lower().find('virtual') != -1
+                ).self_group()
+            ))
         )
     
     total = await db.scalar(count_query)
@@ -795,7 +918,8 @@ async def admin_bookings(
         "page": page,
         "total_pages": total_pages,
         "total": total,
-        "filter_days": filter_days,
+        "from_date": from_date,
+        "to_date": to_date,
         "search": search or "",
         "total_bookings": total_bookings,
         "week_bookings": week_bookings,
@@ -883,6 +1007,57 @@ async def get_booking_details(
         "personal_assistant": booking.personal_assistant,
         "created_at": booking.created_at.isoformat() if booking.created_at else None
     }
+
+@router.api_route("/admin/bookings/{booking_id}/download-medical-file", methods=["GET", "HEAD"])
+async def download_medical_file(
+    booking_id: int,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Download medical history file for a booking"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Get booking to verify it exists and get filename
+    result = await db.execute(
+        select(PackageBooking).where(PackageBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    if not booking.medical_history_file or booking.medical_history_file == 'null':
+        raise HTTPException(status_code=404, detail="No medical history file found")
+    
+    # The medical_history_file field already contains the full path (e.g., media/medical/uuid.pdf)
+    file_path = booking.medical_history_file
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Medical history file not found on server")
+    
+    # Extract just the filename for download
+    filename = os.path.basename(file_path)
+    
+    # For HEAD requests, just return headers without file content
+    if request.method == "HEAD":
+        file_size = os.path.getsize(file_path)
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": str(file_size),
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+        return Response(headers=headers)
+    
+    # For GET requests, return the actual file
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type='application/octet-stream'
+    )
 
 @router.delete("/admin/bookings/{booking_id}")
 async def delete_booking(
