@@ -655,37 +655,190 @@ async def admin_doctors(
 async def admin_treatments(
     request: Request,
     page: int = 1,
+    search: Optional[str] = None,
+    type: Optional[str] = None,
+    hospital: Optional[str] = None,
+    doctor: Optional[str] = None,
+    price: Optional[str] = None,
+    rating: Optional[float] = None,
+    location: Optional[str] = None,
+    export: Optional[bool] = False,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Treatment management page"""
+    """Treatment management page with filtering and export"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
+    # Build query with filters
+    query = select(Treatment).options(
+        selectinload(Treatment.hospital),
+        selectinload(Treatment.doctor)
+    )
+    count_query = select(func.count(Treatment.id))
+    
+    # Apply filters
+    conditions = []
+    
+    if search:
+        search_condition = or_(
+            Treatment.name.ilike(f"%{search}%"),
+            Treatment.short_description.ilike(f"%{search}%"),
+            Treatment.long_description.ilike(f"%{search}%"),
+            Treatment.treatment_type.ilike(f"%{search}%"),
+            Treatment.location.ilike(f"%{search}%")
+        )
+        conditions.append(search_condition)
+    
+    if type:
+        conditions.append(Treatment.treatment_type.ilike(f"%{type}%"))
+    
+    if hospital:
+        # Join with hospital table for filtering
+        hospital_condition = or_(
+            Treatment.hospital.has(Hospital.name.ilike(f"%{hospital}%")),
+            Treatment.other_hospital_name.ilike(f"%{hospital}%")
+        )
+        conditions.append(hospital_condition)
+    
+    if doctor:
+        # Join with doctor table for filtering
+        doctor_condition = or_(
+            Treatment.doctor.has(Doctor.name.ilike(f"%{doctor}%")),
+            Treatment.other_doctor_name.ilike(f"%{doctor}%")
+        )
+        conditions.append(doctor_condition)
+    
+    if location:
+        conditions.append(Treatment.location.ilike(f"%{location}%"))
+    
+    if rating:
+        conditions.append(Treatment.rating >= rating)
+    
+    if price:
+        # Handle price range filtering
+        if price == "0-1000":
+            price_condition = or_(
+                Treatment.price_exact <= 1000,
+                Treatment.price_min <= 1000,
+                Treatment.price_max <= 1000
+            )
+        elif price == "1000-5000":
+            price_condition = or_(
+                and_(Treatment.price_exact >= 1000, Treatment.price_exact <= 5000),
+                and_(Treatment.price_min >= 1000, Treatment.price_min <= 5000),
+                and_(Treatment.price_max >= 1000, Treatment.price_max <= 5000)
+            )
+        elif price == "5000-10000":
+            price_condition = or_(
+                and_(Treatment.price_exact >= 5000, Treatment.price_exact <= 10000),
+                and_(Treatment.price_min >= 5000, Treatment.price_min <= 10000),
+                and_(Treatment.price_max >= 5000, Treatment.price_max <= 10000)
+            )
+        elif price == "10000-50000":
+            price_condition = or_(
+                and_(Treatment.price_exact >= 10000, Treatment.price_exact <= 50000),
+                and_(Treatment.price_min >= 10000, Treatment.price_min <= 50000),
+                and_(Treatment.price_max >= 10000, Treatment.price_max <= 50000)
+            )
+        elif price == "50000+":
+            price_condition = or_(
+                Treatment.price_exact >= 50000,
+                Treatment.price_min >= 50000,
+                Treatment.price_max >= 50000
+            )
+        
+        if 'price_condition' in locals():
+            conditions.append(price_condition)
+    
+    # Apply all conditions
+    if conditions:
+        query = query.where(and_(*conditions))
+        count_query = count_query.where(and_(*conditions))
+    
+    # Handle export
+    if export:
+        result = await db.execute(query.order_by(desc(Treatment.created_at)))
+        treatments = result.scalars().all()
+        
+        # Create CSV content
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Type', 'Description', 'Hospital', 'Doctor', 
+            'Location', 'Price Exact', 'Price Min', 'Price Max', 'Rating',
+            'Duration', 'Recovery Time', 'Success Rate', 'Created Date'
+        ])
+        
+        # Write data
+        for treatment in treatments:
+            writer.writerow([
+                treatment.id,
+                treatment.name,
+                treatment.treatment_type or '',
+                treatment.short_description or '',
+                treatment.hospital.name if treatment.hospital else (treatment.other_hospital_name or ''),
+                f"Dr. {treatment.doctor.name}" if treatment.doctor else (f"Dr. {treatment.other_doctor_name}" if treatment.other_doctor_name else ''),
+                treatment.location or '',
+                treatment.price_exact or '',
+                treatment.price_min or '',
+                treatment.price_max or '',
+                treatment.rating or '',
+                treatment.duration or '',
+                treatment.recovery_time or '',
+                treatment.success_rate or '',
+                treatment.created_at.strftime('%Y-%m-%d %H:%M:%S') if treatment.created_at else ''
+            ])
+        
+        output.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        from datetime import datetime
+        
+        def iter_csv():
+            yield output.getvalue()
+        
+        filename = f"treatments_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return StreamingResponse(
+            iter_csv(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    # Get total count for pagination
+    total = await db.scalar(count_query)
+    
+    # Apply pagination for regular view
     limit = 10
     offset = (page - 1) * limit
-    
-    # Get treatments with pagination, loading hospital and doctor relationships eagerly
     result = await db.execute(
-        select(Treatment).options(
-            selectinload(Treatment.hospital),
-            selectinload(Treatment.doctor)
-        ).order_by(desc(Treatment.created_at)).offset(offset).limit(limit)
+        query.order_by(desc(Treatment.created_at)).offset(offset).limit(limit)
     )
     treatments = result.scalars().all()
     
-    # Get total count for pagination
-    total = await db.scalar(select(func.count(Treatment.id)))
     total_pages = (total + limit - 1) // limit
-    
+
     return render_template("admin/treatments.html", {
         "request": request,
         "admin": admin,
         "treatments": treatments,
         "page": page,
         "total_pages": total_pages,
-        "total": total
+        "total": total,
+        "search": search,
+        "type": type,
+        "hospital": hospital,
+        "doctor": doctor,
+        "price": price,
+        "rating": rating,
+        "location": location
     })
 
 # Offers Management (Attractions / Discount Packages)

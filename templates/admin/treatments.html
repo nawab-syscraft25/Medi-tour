@@ -48,7 +48,75 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">All Treatments</h5>
+                    <div class="row align-items-center mb-3">
+                        <div class="col">
+                            <h5 class="card-title mb-0">All Treatments (<span id="totalCount">{{ total }}</span> total)</h5>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-success btn-sm" onclick="exportTreatments()">
+                                <i class="fas fa-download me-1"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Filter Controls -->
+                    <div class="row g-2">
+                        <div class="col-md-2">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" placeholder="Search treatments..." id="searchInput">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="typeFilter">
+                                <option value="">All Types</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="hospitalFilter">
+                                <option value="">All Hospitals</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="doctorFilter">
+                                <option value="">All Doctors</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <select class="form-select form-select-sm" id="priceFilter">
+                                <option value="">All Prices</option>
+                                <option value="0-1000">₹0-₹1000</option>
+                                <option value="1000-5000">₹1K-₹5K</option>
+                                <option value="5000-10000">₹5K-₹10K</option>
+                                <option value="10000-50000">₹10K-₹50K</option>
+                                <option value="50000+">₹50K+</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <select class="form-select form-select-sm" id="ratingFilter">
+                                <option value="">All Ratings</option>
+                                <option value="5">5 Stars</option>
+                                <option value="4">4+ Stars</option>
+                                <option value="3">3+ Stars</option>
+                                <option value="2">2+ Stars</option>
+                                <option value="1">1+ Stars</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <select class="form-select form-select-sm" id="locationFilter">
+                                <option value="">All Locations</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()" title="Clear all filters">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if treatments %}
@@ -68,7 +136,16 @@
                             </thead>
                             <tbody>
                                 {% for treatment in treatments %}
-                                <tr>
+                                <tr data-name="{{ treatment.name|lower }}"
+                                    data-type="{{ treatment.treatment_type|lower if treatment.treatment_type else '' }}"
+                                    data-hospital="{{ treatment.hospital.name|lower if treatment.hospital else (treatment.other_hospital_name|lower if treatment.other_hospital_name else '') }}"
+                                    data-doctor="{{ treatment.doctor.name|lower if treatment.doctor else (treatment.other_doctor_name|lower if treatment.other_doctor_name else '') }}"
+                                    data-location="{{ treatment.location|lower if treatment.location else '' }}"
+                                    data-price-exact="{{ treatment.price_exact if treatment.price_exact else 0 }}"
+                                    data-price-min="{{ treatment.price_min if treatment.price_min else 0 }}"
+                                    data-price-max="{{ treatment.price_max if treatment.price_max else 0 }}"
+                                    data-rating="{{ treatment.rating if treatment.rating else 0 }}"
+                                    data-description="{{ treatment.short_description|lower if treatment.short_description else '' }}">
                                     <!-- <td>{{ treatment.id }}</td> -->
                                     <td>
                                         <strong>{{ treatment.name }}</strong>
@@ -98,11 +175,11 @@
                                     </td>
                                     <td>
                                         {% if treatment.price_exact %}
-                                        <span class="badge bg-success">${{ "%.2f"|format(treatment.price_exact) }}</span>
+                                        <span class="badge bg-success">₹{{ "%.2f"|format(treatment.price_exact) }}</span>
                                         {% elif treatment.price_min and treatment.price_max %}
-                                        <span class="badge bg-info">${{ "%.2f"|format(treatment.price_min) }} - ${{ "%.2f"|format(treatment.price_max) }}</span>
+                                        <span class="badge bg-info">₹{{ "%.2f"|format(treatment.price_min) }} - ₹{{ "%.2f"|format(treatment.price_max) }}</span>
                                         {% elif treatment.price_min %}
-                                        <span class="badge bg-info">From ${{ "%.2f"|format(treatment.price_min) }}</span>
+                                        <span class="badge bg-info">From ₹{{ "%.2f"|format(treatment.price_min) }}</span>
                                         {% else %}
                                         <span class="badge bg-secondary">Price on request</span>
                                         {% endif %}
@@ -221,7 +298,233 @@
 </div>
 
 <script>
+// Initialize filters when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    populateFilterOptions();
+    setupFilterListeners();
+    setupDeleteHandlers();
+});
+
+// Setup event listeners for all filters
+function setupFilterListeners() {
+    document.getElementById('searchInput').addEventListener('input', filterTreatments);
+    document.getElementById('typeFilter').addEventListener('change', filterTreatments);
+    document.getElementById('hospitalFilter').addEventListener('change', filterTreatments);
+    document.getElementById('doctorFilter').addEventListener('change', filterTreatments);
+    document.getElementById('priceFilter').addEventListener('change', filterTreatments);
+    document.getElementById('ratingFilter').addEventListener('change', filterTreatments);
+    document.getElementById('locationFilter').addEventListener('change', filterTreatments);
+}
+
+// Populate filter dropdown options from existing data
+function populateFilterOptions() {
+    const rows = document.querySelectorAll('tbody tr');
+    const types = new Set();
+    const hospitals = new Set();
+    const doctors = new Set();
+    const locations = new Set();
+    
+    rows.forEach(row => {
+        // Get treatment type
+        const type = row.dataset.type;
+        if (type && type.trim()) {
+            types.add(type.trim());
+        }
+        
+        // Get hospital
+        const hospital = row.dataset.hospital;
+        if (hospital && hospital.trim()) {
+            hospitals.add(hospital.trim());
+        }
+        
+        // Get doctor
+        const doctor = row.dataset.doctor;
+        if (doctor && doctor.trim()) {
+            doctors.add(doctor.trim());
+        }
+        
+        // Get location
+        const location = row.dataset.location;
+        if (location && location.trim()) {
+            locations.add(location.trim());
+        }
+    });
+    
+    // Populate type filter
+    const typeFilter = document.getElementById('typeFilter');
+    const sortedTypes = Array.from(types).sort();
+    sortedTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+        typeFilter.appendChild(option);
+    });
+    
+    // Populate hospital filter
+    const hospitalFilter = document.getElementById('hospitalFilter');
+    const sortedHospitals = Array.from(hospitals).sort();
+    sortedHospitals.forEach(hospital => {
+        const option = document.createElement('option');
+        option.value = hospital;
+        option.textContent = hospital.charAt(0).toUpperCase() + hospital.slice(1);
+        hospitalFilter.appendChild(option);
+    });
+    
+    // Populate doctor filter
+    const doctorFilter = document.getElementById('doctorFilter');
+    const sortedDoctors = Array.from(doctors).sort();
+    sortedDoctors.forEach(doctor => {
+        const option = document.createElement('option');
+        option.value = doctor;
+        option.textContent = 'Dr. ' + doctor.charAt(0).toUpperCase() + doctor.slice(1);
+        doctorFilter.appendChild(option);
+    });
+    
+    // Populate location filter
+    const locationFilter = document.getElementById('locationFilter');
+    const sortedLocations = Array.from(locations).sort();
+    sortedLocations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location.charAt(0).toUpperCase() + location.slice(1);
+        locationFilter.appendChild(option);
+    });
+}
+
+// Main filtering function
+function filterTreatments() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const typeFilter = document.getElementById('typeFilter').value.toLowerCase();
+    const hospitalFilter = document.getElementById('hospitalFilter').value.toLowerCase();
+    const doctorFilter = document.getElementById('doctorFilter').value.toLowerCase();
+    const priceFilter = document.getElementById('priceFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    const locationFilter = document.getElementById('locationFilter').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const name = row.dataset.name || '';
+        const type = row.dataset.type || '';
+        const hospital = row.dataset.hospital || '';
+        const doctor = row.dataset.doctor || '';
+        const location = row.dataset.location || '';
+        const description = row.dataset.description || '';
+        const priceExact = parseFloat(row.dataset.priceExact || '0');
+        const priceMin = parseFloat(row.dataset.priceMin || '0');
+        const priceMax = parseFloat(row.dataset.priceMax || '0');
+        const rating = parseFloat(row.dataset.rating || '0');
+        
+        // Check all filter conditions
+        const matchesSearch = !searchTerm || 
+                            name.includes(searchTerm) || 
+                            type.includes(searchTerm) ||
+                            hospital.includes(searchTerm) ||
+                            doctor.includes(searchTerm) ||
+                            location.includes(searchTerm) ||
+                            description.includes(searchTerm);
+        
+        const matchesType = !typeFilter || type === typeFilter;
+        
+        const matchesHospital = !hospitalFilter || hospital === hospitalFilter;
+        
+        const matchesDoctor = !doctorFilter || doctor === doctorFilter;
+        
+        const matchesLocation = !locationFilter || location === locationFilter;
+        
+        // Price filtering logic
+        let matchesPrice = true;
+        if (priceFilter) {
+            const effectivePrice = priceExact || priceMin || priceMax || 0;
+            
+            if (priceFilter === '0-1000') {
+                matchesPrice = effectivePrice <= 1000;
+            } else if (priceFilter === '1000-5000') {
+                matchesPrice = effectivePrice >= 1000 && effectivePrice <= 5000;
+            } else if (priceFilter === '5000-10000') {
+                matchesPrice = effectivePrice >= 5000 && effectivePrice <= 10000;
+            } else if (priceFilter === '10000-50000') {
+                matchesPrice = effectivePrice >= 10000 && effectivePrice <= 50000;
+            } else if (priceFilter === '50000+') {
+                matchesPrice = effectivePrice >= 50000;
+            }
+        }
+        
+        const matchesRating = !ratingFilter || rating >= parseFloat(ratingFilter);
+        
+        // Show/hide row based on all filters
+        if (matchesSearch && matchesType && matchesHospital && matchesDoctor && 
+            matchesLocation && matchesPrice && matchesRating) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update total count
+    document.getElementById('totalCount').textContent = visibleCount;
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('hospitalFilter').value = '';
+    document.getElementById('doctorFilter').value = '';
+    document.getElementById('priceFilter').value = '';
+    document.getElementById('ratingFilter').value = '';
+    document.getElementById('locationFilter').value = '';
+    filterTreatments();
+}
+
+// Export treatments with current filters
+function exportTreatments() {
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Exporting...';
+    button.disabled = true;
+    
+    // Build export URL with current filters
+    const searchTerm = document.getElementById('searchInput').value;
+    const typeFilter = document.getElementById('typeFilter').value;
+    const hospitalFilter = document.getElementById('hospitalFilter').value;
+    const doctorFilter = document.getElementById('doctorFilter').value;
+    const priceFilter = document.getElementById('priceFilter').value;
+    const ratingFilter = document.getElementById('ratingFilter').value;
+    const locationFilter = document.getElementById('locationFilter').value;
+    
+    const params = new URLSearchParams();
+    params.append('export', 'true');
+    
+    if (searchTerm) params.append('search', searchTerm);
+    if (typeFilter) params.append('type', typeFilter);
+    if (hospitalFilter) params.append('hospital', hospitalFilter);
+    if (doctorFilter) params.append('doctor', doctorFilter);
+    if (priceFilter) params.append('price', priceFilter);
+    if (ratingFilter) params.append('rating', ratingFilter);
+    if (locationFilter) params.append('location', locationFilter);
+    
+    // Create a temporary link to trigger download  
+    const link = document.createElement('a');
+    link.href = `/admin/treatments?${params.toString()}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }, 2000);
+}
+
+// Setup delete button handlers
+function setupDeleteHandlers() {
     // Handle delete button clicks
     document.querySelectorAll('.delete-btn').forEach(button => {
         button.addEventListener('click', function() {
@@ -259,6 +562,6 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
     });
-});
+}
 </script>
 {% endblock %}
