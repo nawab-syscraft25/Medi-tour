@@ -1910,12 +1910,12 @@ async def admin_create_admin(
         # Hash password
         from app.auth import get_password_hash
         hashed_password = get_password_hash(password)
-        
-        # Create new admin
+
+        # Create new admin (store into mapped column `password_hash`)
         new_admin = Admin(
             username=username,
             email=email,
-            hashed_password=hashed_password,
+            password_hash=hashed_password,
             is_super_admin=is_super_admin,
             is_active=True
         )
@@ -1943,7 +1943,8 @@ async def admin_update_admin(
     email: str = Form(...),
     password: str = Form(None),
     is_super_admin: bool = Form(False),
-    is_active: bool = Form(True),
+    # Checkbox fields are only sent when checked; default to False so absence === False
+    is_active: bool = Form(False),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1982,7 +1983,8 @@ async def admin_update_admin(
         # Update password if provided
         if password and password.strip():
             from app.auth import get_password_hash
-            admin_user.hashed_password = get_password_hash(password)
+            # Use the mapped column name `password_hash`
+            admin_user.password_hash = get_password_hash(password)
         
         await db.commit()
         
