@@ -937,6 +937,7 @@ class PartnerHospitalBase(BaseModel):
     location: Optional[str] = None
     position: int = 0
     is_active: bool = True
+    hospital_id: Optional[int] = None
 
 
 class PartnerHospitalCreate(PartnerHospitalBase):
@@ -951,12 +952,13 @@ class PartnerHospitalUpdate(BaseModel):
     location: Optional[str] = None
     position: Optional[int] = None
     is_active: Optional[bool] = None
+    hospital_id: Optional[int] = None
 
 
 class PartnerHospitalResponse(PartnerHospitalBase, BaseSchema):
     id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 # Patient Story schemas

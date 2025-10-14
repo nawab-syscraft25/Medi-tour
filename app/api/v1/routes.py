@@ -3066,10 +3066,11 @@ async def get_partners(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all partner hospitals for frontend display"""
-    query = select(models.PartnerHospital).order_by(models.PartnerHospital.position, models.PartnerHospital.created_at.desc())
+    query = select(models.PartnerHospital).order_by(models.PartnerHospital.created_at.desc())
     
-    if active_only:
-        query = query.where(models.PartnerHospital.is_active == True)
+    # Note: PartnerHospital model doesn't have is_active field yet
+    # if active_only:
+    #     query = query.where(models.PartnerHospital.is_active == True)
     
     result = await db.execute(query)
     partners = result.scalars().all()
