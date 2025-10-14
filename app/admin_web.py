@@ -4478,6 +4478,437 @@ async def admin_banner_new(
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
+    """Banner creation page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/banner_new.html", {
+        "request": request,
+        "admin": admin,
+    })
+
+
+@router.post("/admin/banners/new", response_class=HTMLResponse)
+async def admin_banner_create(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    banner = Banner(
+        title=form["title"],
+        description=form["description"],
+        image_url=form["image_url"],
+        position=int(form["position"]),
+    )
+    db.add(banner)
+    await db.commit()
+    await db.refresh(banner)
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+@router.get("/admin/banners/{banner_id}", response_class=HTMLResponse)
+async def admin_banner_edit(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Banner edit page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    return render_template("admin/banner_edit.html", {
+        "request": request,
+        "admin": admin,
+        "banner": banner,
+    })
+
+
+@router.post("/admin/banners/{banner_id}", response_class=HTMLResponse)
+async def admin_banner_update(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    banner.title = form["title"]
+    banner.description = form["description"]
+    banner.image_url = form["image_url"]
+    banner.position = int(form["position"])
+    await db.commit()
+    await db.refresh(banner)
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+@router.post("/admin/banners/{banner_id}/delete", response_class=HTMLResponse)
+async def admin_banner_delete(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    await db.delete(banner)
+    await db.commit()
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+# ================================
+# PARTNER HOSPITAL MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/partners/new", response_class=HTMLResponse)
+async def admin_partner_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Partner hospital creation page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/partner_new.html", {
+        "request": request,
+        "admin": admin,
+    })
+
+
+@router.post("/admin/partners/new", response_class=HTMLResponse)
+async def admin_partner_create(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    partner = PartnerHospital(
+        name=form["name"],
+        logo_url=form.get("logo_url", ""),
+    )
+    if "hospital_id" in form and form["hospital_id"]:
+        partner.hospital_id = int(form["hospital_id"])
+    db.add(partner)
+    await db.commit()
+    await db.refresh(partner)
+    
+    return RedirectResponse(url="/admin/partners", status_code=302)
+
+
+@router.get("/admin/partners/{partner_id}", response_class=HTMLResponse)
+async def admin_partner_edit(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Partner hospital edit page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    partner = await db.get(PartnerHospital, partner_id)
+    if not partner:
+        return RedirectResponse(url="/admin/partners", status_code=302)
+    
+    return render_template("admin/partner_edit.html", {
+        "request": request,
+        "admin": admin,
+        "partner": partner,
+    })
+
+
+@router.post("/admin/partners/{partner_id}", response_class=HTMLResponse)
+async def admin_partner_update(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    partner = await db.get(PartnerHospital, partner_id)
+    if not partner:
+        return RedirectResponse(url="/admin/partners", status_code=302)
+    
+    partner.name = form.get("name", partner.name)
+    # Only update fields that exist in the PartnerHospital model
+    if "logo_url" in form:
+        partner.logo_url = form["logo_url"]
+    if "hospital_id" in form and form["hospital_id"]:
+        partner.hospital_id = int(form["hospital_id"])
+    elif "hospital_id" in form and not form["hospital_id"]:
+        partner.hospital_id = None
+    await db.commit()
+    await db.refresh(partner)
+    
+    return RedirectResponse(url="/admin/partners", status_code=302)
+
+
+@router.post("/admin/partners/{partner_id}/delete", response_class=HTMLResponse)
+async def admin_partner_delete(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New banner page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/banner_new.html", {
+        "request": request,
+        "admin": admin,
+    })
+
+
+@router.post("/admin/banners/new", response_class=HTMLResponse)
+async def admin_banner_create(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    banner = Banner(
+        title=form["title"],
+        description=form["description"],
+        image=form["image"],
+        position=int(form["position"]),
+        link=form["link"],
+    )
+    db.add(banner)
+    await db.commit()
+    await db.refresh(banner)
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+@router.get("/admin/banners/{banner_id}", response_class=HTMLResponse)
+async def admin_banner_edit(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit banner page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    return render_template("admin/banner_edit.html", {
+        "request": request,
+        "admin": admin,
+        "banner": banner,
+    })
+
+
+@router.post("/admin/banners/{banner_id}", response_class=HTMLResponse)
+async def admin_banner_update(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    banner.title = form["title"]
+    banner.description = form["description"]
+    banner.image = form["image"]
+    banner.position = int(form["position"])
+    banner.link = form["link"]
+    await db.commit()
+    await db.refresh(banner)
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+@router.post("/admin/banners/{banner_id}/delete", response_class=HTMLResponse)
+async def admin_banner_delete(
+    request: Request,
+    banner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete banner"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    banner = await db.get(Banner, banner_id)
+    if not banner:
+        return RedirectResponse(url="/admin/banners", status_code=302)
+    
+    await db.delete(banner)
+    await db.commit()
+    
+    return RedirectResponse(url="/admin/banners", status_code=302)
+
+
+# ================================
+# PARTNER HOSPITAL MANAGEMENT ROUTES
+# ================================
+
+@router.get("/admin/partners/new", response_class=HTMLResponse)
+async def admin_partner_new(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """New partner hospital page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return render_template("admin/partner_new.html", {
+        "request": request,
+        "admin": admin,
+    })
+
+
+@router.post("/admin/partners/new", response_class=HTMLResponse)
+async def admin_partner_create(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    partner = PartnerHospital(
+        name=form["name"],
+        logo_url=form.get("logo_url", ""),
+    )
+    if "hospital_id" in form and form["hospital_id"]:
+        partner.hospital_id = int(form["hospital_id"])
+    db.add(partner)
+    await db.commit()
+    await db.refresh(partner)
+    
+    return RedirectResponse(url="/admin/partners", status_code=302)
+
+
+@router.get("/admin/partners/{partner_id}", response_class=HTMLResponse)
+async def admin_partner_edit(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit partner hospital page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    partner = await db.get(PartnerHospital, partner_id)
+    if not partner:
+        return RedirectResponse(url="/admin/partners", status_code=302)
+    
+    return render_template("admin/partner_edit.html", {
+        "request": request,
+        "admin": admin,
+        "partner": partner,
+    })
+
+
+@router.post("/admin/partners/{partner_id}", response_class=HTMLResponse)
+async def admin_partner_update(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update partner hospital"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    form = await request.form()
+    partner = await db.get(PartnerHospital, partner_id)
+    if not partner:
+        return RedirectResponse(url="/admin/partners", status_code=302)
+    
+    partner.name = form.get("name", partner.name)
+    if "logo_url" in form:
+        partner.logo_url = form["logo_url"]
+    if "hospital_id" in form and form["hospital_id"]:
+        partner.hospital_id = int(form["hospital_id"])
+    elif "hospital_id" in form and not form["hospital_id"]:
+        partner.hospital_id = None
+    await db.commit()
+    await db.refresh(partner)
+    
+    return RedirectResponse(url="/admin/partners", status_code=302)
+
+
+@router.post("/admin/partners/{partner_id}/delete", response_class=HTMLResponse)
+async def admin_partner_delete(
+    request: Request,
+    partner_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
     """New banner form"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
@@ -4678,9 +5109,11 @@ async def admin_partners_list(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    # Get all partner hospitals
+    # Get all partner hospitals with their associated hospitals
     result = await db.execute(
-        select(PartnerHospital).order_by(PartnerHospital.id.desc())
+        select(PartnerHospital)
+        .options(selectinload(PartnerHospital.hospital))
+        .order_by(PartnerHospital.id.desc())
     )
     partners = result.scalars().all()
     
@@ -4691,12 +5124,20 @@ async def admin_partners_list(
     })
 
 
+# ================================
+# PARTNER HOSPITAL MANAGEMENT ROUTES
+# ================================
+
+# Removed duplicate route that didn't load hospital relationship
+# The correct implementation is further down in the file at line 5252
+
 @router.get("/admin/partners/new", response_class=HTMLResponse)
 async def admin_partner_new(
     request: Request,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
+
     """New partner hospital form"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:

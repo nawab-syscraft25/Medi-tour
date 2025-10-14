@@ -959,6 +959,7 @@ class PartnerHospitalResponse(PartnerHospitalBase, BaseSchema):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    hospital: Optional["HospitalResponse"] = None
 
 
 # Patient Story schemas

@@ -3057,7 +3057,28 @@ async def create_partner(
     db.add(db_partner)
     await db.commit()
     await db.refresh(db_partner)
-    return db_partner
+    
+    # Load the partner with hospital relationship for the response
+    result = await db.execute(
+        select(models.PartnerHospital)
+        .options(selectinload(models.PartnerHospital.hospital))
+        .where(models.PartnerHospital.id == db_partner.id)
+    )
+    fresh_partner = result.scalar_one()
+    
+    return fresh_partner
+
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List
+
+from app import models, schemas
+from app.dependencies import get_db, get_current_admin
+
+router = APIRouter()
 
 
 @router.get("/partners", response_model=List[schemas.PartnerHospitalResponse])
@@ -3066,7 +3087,9 @@ async def get_partners(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all partner hospitals for frontend display"""
-    query = select(models.PartnerHospital).order_by(models.PartnerHospital.created_at.desc())
+    query = select(models.PartnerHospital).options(
+        selectinload(models.PartnerHospital.hospital)
+    ).order_by(models.PartnerHospital.created_at.desc())
     
     # Note: PartnerHospital model doesn't have is_active field yet
     # if active_only:
@@ -3081,7 +3104,11 @@ async def get_partners(
 @router.get("/partners/{partner_id}", response_model=schemas.PartnerHospitalResponse)
 async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific partner hospital by ID"""
-    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
+    result = await db.execute(
+        select(models.PartnerHospital)
+        .options(selectinload(models.PartnerHospital.hospital))
+        .where(models.PartnerHospital.id == partner_id)
+    )
     partner = result.scalar_one_or_none()
     
     if not partner:
@@ -3098,7 +3125,11 @@ async def update_partner(
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing partner hospital (admin only)"""
-    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
+    result = await db.execute(
+        select(models.PartnerHospital)
+        .options(selectinload(models.PartnerHospital.hospital))
+        .where(models.PartnerHospital.id == partner_id)
+    )
     partner = result.scalar_one_or_none()
     if not partner:
         raise HTTPException(status_code=404, detail="Partner hospital not found")

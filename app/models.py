@@ -83,7 +83,7 @@ class Hospital(Base):
     faqs = relationship("FAQ", 
                        primaryjoin="and_(Hospital.id == foreign(FAQ.owner_id), FAQ.owner_type == 'hospital')",
                        lazy="select", viewonly=True)
-    partner_hospitals = relationship("PartnerHospital", foreign_keys="PartnerHospital.hospital_id", lazy="noload")
+    partner_hospitals = relationship("PartnerHospital", foreign_keys="PartnerHospital.hospital_id", lazy="noload", overlaps="hospital")
 
 
 class Doctor(Base):
@@ -352,7 +352,7 @@ class PartnerHospital(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationship to Hospital
-    hospital = relationship("Hospital", foreign_keys=[hospital_id], lazy="noload")
+    hospital = relationship("Hospital", foreign_keys=[hospital_id], lazy="noload", overlaps="partner_hospitals")
 
 
 class PatientStory(Base):
