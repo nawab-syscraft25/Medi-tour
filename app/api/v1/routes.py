@@ -7,9 +7,13 @@ from typing import List, Optional
 import os
 import uuid
 from pathlib import Path
-import razorpay
+import razorpay  # Restore razorpay import
 from app.db import get_db
 from app import models, schemas
+from app.dependencies import get_current_admin, get_current_user
+
+from app.dependencies import get_current_admin, get_current_user
+
 from app.dependencies import get_current_admin, get_current_user
 
 
@@ -120,6 +124,9 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "location": treatment.location,
         "features": treatment.features,
         "rating": treatment.rating,
+        "is_ayushman": treatment.is_ayushman if treatment.is_ayushman is not None else False,
+        "Includes": treatment.Includes,
+        "excludes": treatment.excludes,
         "is_featured": treatment.is_featured if treatment.is_featured is not None else False,
         "created_at": treatment.created_at,
         "images": [],  # Will be populated separately

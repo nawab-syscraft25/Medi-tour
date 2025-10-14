@@ -389,6 +389,9 @@ class TreatmentBase(BaseModel):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     features: Optional[str] = None  # comma-separated features
+    is_ayushman: bool = False
+    Includes: Optional[str] = None
+    excludes: Optional[str] = None
     is_featured: bool = False
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
@@ -439,6 +442,9 @@ class TreatmentUpdate(BaseModel):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     features: Optional[str] = None
+    is_ayushman: Optional[bool] = None
+    Includes: Optional[str] = None
+    excludes: Optional[str] = None
     is_featured: Optional[bool] = None
     
     @validator('price_min', 'price_max', 'price_exact', pre=True, always=True)
@@ -486,6 +492,9 @@ class TreatmentResponse(BaseSchema):
     other_doctor_name: Optional[str] = None
     location: Optional[str] = None
     features: Optional[str] = None
+    is_ayushman: bool = False
+    Includes: Optional[str] = None
+    excludes: Optional[str] = None
     is_featured: bool = False
     created_at: datetime
     images: List[ImageResponse] = []

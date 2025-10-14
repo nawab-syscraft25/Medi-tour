@@ -21,8 +21,8 @@
                 <thead>
                     <tr>
                         <th>Hospital Name</th>
+                        <th>Associated Hospital</th>
                         <th>Logo</th>
-                        <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
                     </tr>
@@ -34,17 +34,17 @@
                             <strong>{{ partner.name }}</strong>
                         </td>
                         <td>
+                            {% if partner.hospital %}
+                            <span class="badge bg-info">{{ partner.hospital.name }}</span>
+                            {% else %}
+                            <span class="text-muted">Not associated</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if partner.logo_url %}
                             <img src="{{ partner.logo_url }}" alt="{{ partner.name }} Logo" class="img-thumbnail" style="width: 60px; height: 40px; object-fit: contain;">
                             {% else %}
                             <span class="text-muted">No logo</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if partner.is_active %}
-                            <span class="badge bg-success">Active</span>
-                            {% else %}
-                            <span class="badge bg-secondary">Inactive</span>
                             {% endif %}
                         </td>
                         <td>

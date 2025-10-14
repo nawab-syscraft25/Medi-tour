@@ -7,17 +7,17 @@
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
                 <div>
                     <h1 class="h3 mb-0">Treatment Management</h1>
-                    <p class="text-muted">Manage medical treatments and procedures</p>
+                    <p class="text-muted mb-0">Manage medical treatments and procedures</p>
                 </div>
-                <div>
-                    <a href="/admin/treatments/new" class="btn btn-primary me-2">
-                        <i class="fas fa-plus"></i> Add Treatment
+                <div class="d-flex gap-2">
+                    <a href="/admin/treatments/new" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i> Add Treatment
                     </a>
                     <a href="/admin/dashboard" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
                     </a>
                 </div>
             </div>
@@ -26,13 +26,13 @@
 
     <!-- Statistics Cards -->
     <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
+        <div class="col-md-3 mb-3 mb-md-0">
+            <div class="card bg-info text-white h-100">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="card-title">{{ total }}</h4>
-                            <p class="card-text">Total Treatments</p>
+                            <h4 class="card-title mb-0">{{ total }}</h4>
+                            <p class="card-text mb-0">Total Treatments</p>
                         </div>
                         <div class="align-self-center">
                             <i class="fas fa-procedures fa-2x"></i>
@@ -49,10 +49,10 @@
             <div class="card">
                 <div class="card-header">
                     <div class="row align-items-center mb-3">
-                        <div class="col">
+                        <div class="col-md-6">
                             <h5 class="card-title mb-0">All Treatments (<span id="totalCount">{{ total }}</span> total)</h5>
                         </div>
-                        <div class="col-auto">
+                        <div class="col-md-6 text-md-end">
                             <button class="btn btn-success btn-sm" onclick="exportTreatments()">
                                 <i class="fas fa-download me-1"></i>Export
                             </button>
@@ -61,31 +61,31 @@
                     
                     <!-- Filter Controls -->
                     <div class="row g-2">
-                        <div class="col-md-2">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                <input type="text" class="form-control" placeholder="Search treatments..." id="searchInput">
+                                <input type="text" class="form-control" placeholder="Search..." id="searchInput">
                             </div>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="typeFilter">
                                 <option value="">All Types</option>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="hospitalFilter">
                                 <option value="">All Hospitals</option>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="doctorFilter">
                                 <option value="">All Doctors</option>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="priceFilter">
                                 <option value="">All Prices</option>
                                 <option value="0-1000">₹0-₹1000</option>
@@ -95,7 +95,7 @@
                                 <option value="50000+">₹50K+</option>
                             </select>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="ratingFilter">
                                 <option value="">All Ratings</option>
                                 <option value="5">5 Stars</option>
@@ -105,15 +105,22 @@
                                 <option value="1">1+ Stars</option>
                             </select>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <select class="form-select form-select-sm" id="locationFilter">
                                 <option value="">All Locations</option>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                            <select class="form-select form-select-sm" id="ayushmanFilter">
+                                <option value="">All Treatments</option>
+                                <option value="ayushman">Ayushman Bharat</option>
+                                <option value="non-ayushman">Non-Ayushman</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()" title="Clear all filters">
-                                <i class="fas fa-times"></i>
+                                <i class="fas fa-times me-1"></i>Clear
                             </button>
                         </div>
                     </div>
@@ -124,8 +131,7 @@
                         <table class="table table-striped table-hover">
                             <thead class="table-dark">
                                 <tr>
-                                    <!-- <th>ID</th> -->
-                                    <th>Name</th>
+                                    <th>Name & Details</th>
                                     <th>Description</th>
                                     <th>Price</th>
                                     <th>Rating</th>
@@ -145,27 +151,31 @@
                                     data-price-min="{{ treatment.price_min if treatment.price_min else 0 }}"
                                     data-price-max="{{ treatment.price_max if treatment.price_max else 0 }}"
                                     data-rating="{{ treatment.rating if treatment.rating else 0 }}"
-                                    data-description="{{ treatment.short_description|lower if treatment.short_description else '' }}">
-                                    <!-- <td>{{ treatment.id }}</td> -->
+                                    data-description="{{ treatment.short_description|lower if treatment.short_description else '' }}"
+                                    data-is-ayushman="{{ 'true' if treatment.is_ayushman else 'false' }}">
                                     <td>
-                                        <strong>{{ treatment.name }}</strong>
-                                        {% if treatment.treatment_type %}
-                                        <br><small class="text-muted"><i class="fas fa-tag"></i> {{ treatment.treatment_type }}</small>
-                                        {% endif %}
-                                        {% if treatment.hospital %}
-                                        <br><small class="text-primary"><i class="fas fa-hospital"></i> {{ treatment.hospital.name }}</small>
-                                        {% elif treatment.other_hospital_name %}
-                                        <br><small class="text-primary"><i class="fas fa-hospital"></i> {{ treatment.other_hospital_name }}</small>
-                                        {% endif %}
-                                        {% if treatment.doctor %}
-                                        <br><small class="text-success"><i class="fas fa-user-md"></i> Dr. {{ treatment.doctor.name }}</small>
-                                        {% elif treatment.other_doctor_name %}
-                                        <br><small class="text-success"><i class="fas fa-user-md"></i> Dr. {{ treatment.other_doctor_name }}</small>
-                                        {% endif %}
+                                        <div class="d-flex flex-column">
+                                            <strong>{{ treatment.name }}</strong>
+                                            <div class="small text-muted mt-1">
+                                                {% if treatment.treatment_type %}
+                                                <span class="d-block"><i class="fas fa-tag me-1"></i> {{ treatment.treatment_type }}</span>
+                                                {% endif %}
+                                                {% if treatment.hospital %}
+                                                <span class="d-block text-primary"><i class="fas fa-hospital me-1"></i> {{ treatment.hospital.name }}</span>
+                                                {% elif treatment.other_hospital_name %}
+                                                <span class="d-block text-primary"><i class="fas fa-hospital me-1"></i> {{ treatment.other_hospital_name }}</span>
+                                                {% endif %}
+                                                {% if treatment.doctor %}
+                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i> Dr. {{ treatment.doctor.name }}</span>
+                                                {% elif treatment.other_doctor_name %}
+                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i> Dr. {{ treatment.other_doctor_name }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         {% if treatment.short_description %}
-                                        <span class="text-truncate" style="max-width: 200px; display: inline-block;" 
+                                        <span class="text-truncate d-inline-block" style="max-width: 200px;" 
                                               title="{{ treatment.short_description }}">
                                             {{ treatment.short_description[:100] }}{% if treatment.short_description|length > 100 %}...{% endif %}
                                         </span>
@@ -182,6 +192,9 @@
                                         <span class="badge bg-info">From ₹{{ "%.2f"|format(treatment.price_min) }}</span>
                                         {% else %}
                                         <span class="badge bg-secondary">Price on request</span>
+                                        {% endif %}
+                                        {% if treatment.is_ayushman %}
+                                        <br><span class="badge bg-success mt-1"><i class="fas fa-file-medical"></i> Ayushman</span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -314,6 +327,7 @@ function setupFilterListeners() {
     document.getElementById('priceFilter').addEventListener('change', filterTreatments);
     document.getElementById('ratingFilter').addEventListener('change', filterTreatments);
     document.getElementById('locationFilter').addEventListener('change', filterTreatments);
+    document.getElementById('ayushmanFilter').addEventListener('change', filterTreatments);
 }
 
 // Populate filter dropdown options from existing data
@@ -400,6 +414,7 @@ function filterTreatments() {
     const priceFilter = document.getElementById('priceFilter').value;
     const ratingFilter = document.getElementById('ratingFilter').value;
     const locationFilter = document.getElementById('locationFilter').value.toLowerCase();
+    const ayushmanFilter = document.getElementById('ayushmanFilter').value;
     
     const rows = document.querySelectorAll('tbody tr');
     let visibleCount = 0;
@@ -415,6 +430,7 @@ function filterTreatments() {
         const priceMin = parseFloat(row.dataset.priceMin || '0');
         const priceMax = parseFloat(row.dataset.priceMax || '0');
         const rating = parseFloat(row.dataset.rating || '0');
+        const isAyushman = row.dataset.isAyushman === 'true';
         
         // Check all filter conditions
         const matchesSearch = !searchTerm || 
@@ -453,9 +469,19 @@ function filterTreatments() {
         
         const matchesRating = !ratingFilter || rating >= parseFloat(ratingFilter);
         
+        // Ayushman filtering logic
+        let matchesAyushman = true;
+        if (ayushmanFilter) {
+            if (ayushmanFilter === 'ayushman') {
+                matchesAyushman = isAyushman;
+            } else if (ayushmanFilter === 'non-ayushman') {
+                matchesAyushman = !isAyushman;
+            }
+        }
+        
         // Show/hide row based on all filters
         if (matchesSearch && matchesType && matchesHospital && matchesDoctor && 
-            matchesLocation && matchesPrice && matchesRating) {
+            matchesLocation && matchesPrice && matchesRating && matchesAyushman) {
             row.style.display = '';
             visibleCount++;
         } else {
@@ -476,12 +502,14 @@ function clearFilters() {
     document.getElementById('priceFilter').value = '';
     document.getElementById('ratingFilter').value = '';
     document.getElementById('locationFilter').value = '';
+    document.getElementById('ayushmanFilter').value = '';
     filterTreatments();
 }
 
 // Export treatments with current filters
 function exportTreatments() {
-    const button = event.target.closest('button');
+    // Get the export button and store original text
+    const button = document.querySelector('button[onclick="exportTreatments()"]');
     const originalText = button.innerHTML;
     
     // Show loading state
@@ -496,7 +524,9 @@ function exportTreatments() {
     const priceFilter = document.getElementById('priceFilter').value;
     const ratingFilter = document.getElementById('ratingFilter').value;
     const locationFilter = document.getElementById('locationFilter').value;
+    const ayushmanFilter = document.getElementById('ayushmanFilter').value;
     
+    // Build URL parameters
     const params = new URLSearchParams();
     params.append('export', 'true');
     
@@ -507,20 +537,42 @@ function exportTreatments() {
     if (priceFilter) params.append('price', priceFilter);
     if (ratingFilter) params.append('rating', ratingFilter);
     if (locationFilter) params.append('location', locationFilter);
+    if (ayushmanFilter) params.append('ayushman', ayushmanFilter);
     
-    // Create a temporary link to trigger download  
-    const link = document.createElement('a');
-    link.href = `/admin/treatments?${params.toString()}`;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create the full URL for export
+    const baseUrl = window.location.href.split('?')[0]; // Get base URL without query params
+    const exportUrl = `${baseUrl}?${params.toString()}`;
     
-    // Reset button after a short delay
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.disabled = false;
-    }, 2000);
+    // Use fetch API to trigger download
+    fetch(exportUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a temporary link to trigger download
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `treatments_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            alert('Export failed. Please try again.');
+        })
+        .finally(() => {
+            // Reset button after a short delay
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }, 2000);
+        });
 }
 
 // Setup delete button handlers

@@ -34,13 +34,21 @@
                 </div>
             </div>
             
-            <!-- Hidden fields for position and description -->
-            <input type="hidden" name="position" value="{{ partner.position if partner else 0 }}">
-            <input type="hidden" name="description" value="{{ partner.description if partner and partner.description else '' }}">
-
-            <!-- Hidden fields for location and website_url -->
-            <input type="hidden" name="location" value="{{ partner.location if partner and partner.location else '' }}">
-            <input type="hidden" name="website_url" value="{{ partner.website_url if partner and partner.website_url else '' }}">
+            <!-- Hospital Association -->
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label for="hospital_id" class="form-label">Associate with Existing Hospital</label>
+                    <select class="form-select" id="hospital_id" name="hospital_id">
+                        <option value="">Select Hospital (Optional)</option>
+                        {% for hospital in hospitals %}
+                        <option value="{{ hospital.id }}" {% if partner and partner.hospital_id == hospital.id %}selected{% endif %}>
+                            {{ hospital.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Link this partner to an existing hospital in the system</div>
+                </div>
+            </div>
 
             <!-- Logo Upload -->
             <div class="mb-3">
@@ -54,18 +62,6 @@
                     <img src="{{ partner.logo_url }}" alt="Current Logo" class="img-thumbnail" style="max-width: 150px; height: auto;">
                 </div>
                 {% endif %}
-            </div>
-
-            <!-- Status -->
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="true" 
-                           {% if partner and partner.is_active %}checked{% endif %}>
-                    <label class="form-check-label" for="is_active">
-                        <i class="fas fa-eye text-success"></i> Active Partner
-                    </label>
-                    <div class="form-text">Active partners will be displayed on the website</div>
-                </div>
             </div>
 
             <!-- Submit Buttons -->

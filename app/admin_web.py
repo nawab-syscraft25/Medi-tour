@@ -249,9 +249,6 @@ async def get_dashboard_stats(db: AsyncSession):
     stats["banners"] = await db.scalar(select(func.count(Banner.id)))
     stats["active_banners"] = await db.scalar(select(func.count(Banner.id)).where(Banner.is_active == True))
     stats["partners"] = await db.scalar(select(func.count(PartnerHospital.id)))
-    stats["active_partners"] = await db.scalar(select(func.count(PartnerHospital.id)).where(PartnerHospital.is_active == True))
-    stats["stories"] = await db.scalar(select(func.count(PatientStory.id)))
-    stats["featured_stories"] = await db.scalar(select(func.count(PatientStory.id)).where(PatientStory.is_featured == True))
     stats["admins"] = await db.scalar(select(func.count(Admin.id)))
     stats["images"] = await db.scalar(select(func.count(Image.id)))
     stats["users"] = await db.scalar(select(func.count(User.id)))
@@ -717,6 +714,7 @@ async def admin_treatments(
     price: Optional[str] = None,
     rating: Optional[float] = None,
     location: Optional[str] = None,
+    ayushman: Optional[str] = None,
     export: Optional[bool] = False,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -770,6 +768,13 @@ async def admin_treatments(
     
     if rating:
         conditions.append(Treatment.rating >= rating)
+    
+    # Handle Ayushman Bharat filter
+    if ayushman:
+        if ayushman == "ayushman":
+            conditions.append(Treatment.is_ayushman == True)
+        elif ayushman == "non-ayushman":
+            conditions.append(Treatment.is_ayushman == False)
     
     if price:
         # Handle price range filtering
@@ -828,7 +833,8 @@ async def admin_treatments(
         writer.writerow([
             'ID', 'Name', 'Type', 'Description', 'Hospital', 'Doctor', 
             'Location', 'Price Exact', 'Price Min', 'Price Max', 'Rating',
-            'Duration', 'Recovery Time', 'Success Rate', 'Created Date'
+            'Ayushman Bharat', 'Includes', 'Excludes',
+            'Created Date'
         ])
         
         # Write data
@@ -845,9 +851,9 @@ async def admin_treatments(
                 treatment.price_min or '',
                 treatment.price_max or '',
                 treatment.rating or '',
-                treatment.duration or '',
-                treatment.recovery_time or '',
-                treatment.success_rate or '',
+                'Yes' if treatment.is_ayushman else 'No',
+                treatment.Includes or '',
+                treatment.excludes or '',
                 treatment.created_at.strftime('%Y-%m-%d %H:%M:%S') if treatment.created_at else ''
             ])
         
@@ -893,7 +899,8 @@ async def admin_treatments(
         "doctor": doctor,
         "price": price,
         "rating": rating,
-        "location": location
+        "location": location,
+        "ayushman": ayushman
     })
 
 # Offers Management (Attractions / Discount Packages)
@@ -3159,6 +3166,9 @@ async def admin_treatment_create(
     doctor_id: Optional[int] = Form(None),
     other_doctor_name: str = Form(""),
     is_featured: bool = Form(False),
+    is_ayushman: bool = Form(False),
+    Includes: str = Form(""),
+    excludes: str = Form(""),
     faq_questions: List[str] = Form(default=[]),
     faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
@@ -3188,6 +3198,9 @@ async def admin_treatment_create(
             doctor_id=doctor_id,
             other_doctor_name=other_doctor_name or None,
             is_featured=is_featured,
+            is_ayushman=is_ayushman,
+            Includes=Includes or None,
+            excludes=excludes or None,
             created_at=datetime.now()
         )
         
@@ -3261,6 +3274,9 @@ async def admin_treatment_update(
     doctor_id: str = Form(""),
     other_doctor_name: str = Form(""),
     is_featured: bool = Form(False),
+    is_ayushman: bool = Form(False),
+    Includes: str = Form(""),
+    excludes: str = Form(""),
     faq1_question: str = Form(""),
     faq1_answer: str = Form(""),
     faq2_question: str = Form(""),
@@ -3348,6 +3364,188 @@ async def admin_treatment_update(
             raise HTTPException(status_code=404, detail="Image not found")
         
         # Handle setting primary image
+        if set_primary_image and set_primary_image.isdigit():
+            print(f"Processing setting primary image for image ID: {set_primary_image}, treatment ID: {treatment_id}")
+            image_id = int(set_primary_image)
+            # Get the image to set as primary
+            result = await db.execute(
+                select(Image)
+                .where(Image.id == image_id)
+                .where(Image.owner_type == "treatment")
+                .where(Image.owner_id == treatment_id)
+            )
+            image = result.scalar_one_or_none()
+            print(f"Found image to set as primary: {image}")
+            
+            if image:
+                # Set all images to non-primary
+                await db.execute(
+                    update(Image)
+                    .where(Image.owner_type == "treatment")
+                    .where(Image.owner_id == treatment_id)
+                    .values(is_primary=False)
+                )
+                # Set the selected image as primary
+                image.is_primary = True
+                await db.commit()
+                
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return {"success": True, "message": "Primary image set successfully"}
+                return RedirectResponse(
+                    f"/admin/treatments/{treatment_id}/edit", 
+                    status_code=303,
+                    headers={"HX-Redirect": f"/admin/treatments/{treatment_id}/edit"}
+                )
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return {"success": False, "message": "Image not found"}
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        # Handle image order update
+        if update_image_order and image_order:
+            print(f"Processing image order update for treatment ID: {treatment_id}")
+            image_order_list = parse_comma_separated_string(image_order)
+            print(f"New image order: {image_order_list}")
+            
+            for position, image_id in enumerate(image_order_list):
+                if image_id.isdigit():
+                    image_id = int(image_id)
+                    # Get the image to update
+                    result = await db.execute(
+                        select(Image)
+                        .where(Image.id == image_id)
+                        .where(Image.owner_type == "treatment")
+                        .where(Image.owner_id == treatment_id)
+                    )
+                    image = result.scalar_one_or_none()
+                    print(f"Found image to update: {image}")
+                    
+                    if image:
+                        image.position = position
+                        await db.commit()
+                    else:
+                        print(f"Image ID {image_id} not found for treatment ID {treatment_id}")
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return {"success": True, "message": "Image order updated successfully"}
+            return RedirectResponse(
+                f"/admin/treatments/{treatment_id}/edit", 
+                status_code=303,
+                headers={"HX-Redirect": f"/admin/treatments/{treatment_id}/edit"}
+            )
+        
+        # Handle regular form submission
+        # Create and validate the update data using Pydantic schema
+        update_data = TreatmentUpdate(
+            name=name,
+            short_description=short_description,
+            long_description=long_description or None,
+            treatment_type=treatment_type,
+            location=location,
+            features=parse_comma_separated_string(features) if features else None,
+            price_min=price_min,
+            price_max=price_max,
+            price_exact=price_exact,
+            rating=rating,
+            hospital_id=int(hospital_id) if hospital_id and hospital_id.strip() else None,
+            other_hospital_name=other_hospital_name or None,
+            doctor_id=int(doctor_id) if doctor_id and doctor_id.strip() else None,
+            other_doctor_name=other_doctor_name or None,
+            is_featured=is_featured,
+            is_ayushman=is_ayushman,
+            Includes=Includes or None,
+            excludes=excludes or None
+        )
+        
+        # Update treatment fields
+        treatment.name = update_data.name
+        treatment.short_description = update_data.short_description
+        treatment.long_description = update_data.long_description
+        treatment.treatment_type = update_data.treatment_type
+        treatment.location = update_data.location
+        treatment.features = update_data.features
+        treatment.price_min = update_data.price_min
+        treatment.price_max = update_data.price_max
+        treatment.price_exact = update_data.price_exact
+        treatment.rating = update_data.rating
+        treatment.hospital_id = update_data.hospital_id
+        treatment.other_hospital_name = update_data.other_hospital_name
+        treatment.doctor_id = update_data.doctor_id
+        treatment.other_doctor_name = update_data.other_doctor_name
+        treatment.is_featured = update_data.is_featured
+        treatment.is_ayushman = update_data.is_ayushman
+        treatment.Includes = update_data.Includes
+        treatment.excludes = update_data.excludes
+        
+        # Update FAQ fields
+        treatment.faq1_question = faq1_question.strip() if faq1_question else None
+        treatment.faq1_answer = faq1_answer.strip() if faq1_answer else None
+        treatment.faq2_question = faq2_question.strip() if faq2_question else None
+        treatment.faq2_answer = faq2_answer.strip() if faq2_answer else None
+        treatment.faq3_question = faq3_question.strip() if faq3_question else None
+        treatment.faq3_answer = faq3_answer.strip() if faq3_answer else None
+        treatment.faq4_question = faq4_question.strip() if faq4_question else None
+        treatment.faq4_answer = faq4_answer.strip() if faq4_answer else None
+        treatment.faq5_question = faq5_question.strip() if faq5_question else None
+        treatment.faq5_answer = faq5_answer.strip() if faq5_answer else None
+        
+        # Handle new image uploads
+        existing_images_result = await db.execute(
+            select(Image)
+            .where(Image.owner_type == "treatment")
+            .where(Image.owner_id == treatment.id)
+            .order_by(Image.position)
+        )
+        existing_images = existing_images_result.scalars().all()
+        next_position = len(existing_images)
+        
+        for image_file in images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "treatment")
+                if filename:
+                    image = Image(
+                        owner_type="treatment",
+                        owner_id=treatment.id,
+                        url=f"/media/treatment/{filename}",
+                        is_primary=next_position == 0,  # First image is primary
+                        position=next_position
+                    )
+                    db.add(image)
+                    next_position += 1
+
+        print(f"DEBUG: Updated FAQ fields for treatment {treatment.id}")
+        
+        await db.commit()
+        
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return {"success": True, "message": "Treatment updated successfully"}
+            
+        return RedirectResponse(url="/admin/treatments", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        error_msg = f"Error updating treatment: {str(e)}"
+        print(error_msg)
+        
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return {"success": False, "message": error_msg}
+            
+        hospitals = await db.execute(select(Hospital).order_by(Hospital.name))
+        hospitals = hospitals.scalars().all()
+        doctors = await db.execute(select(Doctor).order_by(Doctor.name))
+        doctors = doctors.scalars().all()
+        
+        return render_template("admin/treatment_form.html", {
+            "request": request,
+            "admin": admin,
+            "treatment": treatment,
+            "hospitals": hospitals,
+            "doctors": doctors,
+            "action": "Update",
+            "error": error_msg
+        })
+
+# Offer CRUD Operations
         if set_primary_image and set_primary_image.isdigit():
             image_id = int(set_primary_image)
             
@@ -4482,7 +4680,7 @@ async def admin_partners_list(
     
     # Get all partner hospitals
     result = await db.execute(
-        select(PartnerHospital).order_by(PartnerHospital.position.asc(), PartnerHospital.id.desc())
+        select(PartnerHospital).order_by(PartnerHospital.id.desc())
     )
     partners = result.scalars().all()
     
@@ -4504,11 +4702,16 @@ async def admin_partner_new(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
+    # Get all hospitals for the form
+    hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name))
+    hospitals = hospitals_result.scalars().all()
+    
     return render_template("admin/partner_form.html", {
         "request": request,
         "admin": admin,
         "action": "Create",
-        "partner": None
+        "partner": None,
+        "hospitals": hospitals
     })
 
 
@@ -4516,11 +4719,7 @@ async def admin_partner_new(
 async def admin_partner_create(
     request: Request,
     name: str = Form(...),
-    description: str = Form(""),
-    website_url: str = Form(""),
-    location: str = Form(""),
-    position: int = Form(0),
-    is_active: bool = Form(False),
+    hospital_id: int = Form(None),
     logo_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -4540,12 +4739,8 @@ async def admin_partner_create(
         # Create partner
         partner = PartnerHospital(
             name=name,
-            description=description or None,
             logo_url=logo_url,
-            website_url=website_url or None,
-            location=location or None,
-            position=position,
-            is_active=is_active
+            hospital_id=hospital_id
         )
         
         db.add(partner)
@@ -4556,11 +4751,16 @@ async def admin_partner_create(
     except Exception as e:
         await db.rollback()
         print(f"Error creating partner: {str(e)}")
+        # Get all hospitals for the form
+        hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name))
+        hospitals = hospitals_result.scalars().all()
+        
         return render_template("admin/partner_form.html", {
             "request": request,
             "admin": admin,
             "action": "Create",
             "partner": None,
+            "hospitals": hospitals,
             "error": f"Error creating partner: {str(e)}"
         })
 
@@ -4584,11 +4784,16 @@ async def admin_partner_edit(
     if not partner:
         raise HTTPException(status_code=404, detail="Partner hospital not found")
     
+    # Get all hospitals for the form
+    hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name))
+    hospitals = hospitals_result.scalars().all()
+    
     return render_template("admin/partner_form.html", {
         "request": request,
         "admin": admin,
         "action": "Edit",
-        "partner": partner
+        "partner": partner,
+        "hospitals": hospitals
     })
 
 
@@ -4597,11 +4802,7 @@ async def admin_partner_update(
     request: Request,
     partner_id: int,
     name: str = Form(...),
-    description: str = Form(""),
-    website_url: str = Form(""),
-    location: str = Form(""),
-    position: int = Form(0),
-    is_active: bool = Form(False),
+    hospital_id: int = Form(None),
     logo_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -4626,11 +4827,7 @@ async def admin_partner_update(
         
         # Update partner fields
         partner.name = name
-        partner.description = description or None
-        partner.website_url = website_url or None
-        partner.location = location or None
-        partner.position = position
-        partner.is_active = is_active
+        partner.hospital_id = hospital_id
         partner.updated_at = datetime.utcnow()
         
         await db.commit()
@@ -4640,11 +4837,16 @@ async def admin_partner_update(
     except Exception as e:
         await db.rollback()
         print(f"Error updating partner: {str(e)}")
+        # Get all hospitals for the form
+        hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name))
+        hospitals = hospitals_result.scalars().all()
+        
         return render_template("admin/partner_form.html", {
             "request": request,
             "admin": admin,
             "action": "Edit",
             "partner": partner,
+            "hospitals": hospitals,
             "error": f"Error updating partner: {str(e)}"
         })
 
@@ -4692,9 +4894,9 @@ async def admin_stories_list(
         return RedirectResponse(url="/admin", status_code=302)
     
     # Get all patient stories
-    result = await db.execute(
-        select(PatientStory).order_by(PatientStory.position.asc(), PatientStory.id.desc())
-    )
+    # result = await db.execute(
+    #     select(PatientStory).order_by(PatientStory.position.asc(), PatientStory.id.desc())
+    # )
     stories = result.scalars().all()
     
     return render_template("admin/stories.html", {
@@ -4832,6 +5034,33 @@ async def admin_story_update(
 ):
     """Update patient story"""
     admin = await get_current_admin_dict(session_token, db)
+
+
+@router.get("/admin/partners", response_class=HTMLResponse)
+async def admin_partners_list(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Partner hospitals management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    # Get all partner hospitals with hospital information
+    result = await db.execute(
+        select(PartnerHospital)
+        .options(selectinload(PartnerHospital.hospital))
+        .order_by(PartnerHospital.id.desc())
+    )
+    partners = result.scalars().all()
+    
+    return render_template("admin/partners.html", {
+        "request": request,
+        "admin": admin,
+        "partners": partners
+    })
+
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     

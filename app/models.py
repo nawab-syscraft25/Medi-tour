@@ -83,6 +83,8 @@ class Hospital(Base):
     faqs = relationship("FAQ", 
                        primaryjoin="and_(Hospital.id == foreign(FAQ.owner_id), FAQ.owner_type == 'hospital')",
                        lazy="select", viewonly=True)
+    partner_hospitals = relationship("PartnerHospital", foreign_keys="PartnerHospital.hospital_id", lazy="noload")
+
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -171,6 +173,10 @@ class Treatment(Base):
     other_doctor_name = Column(String(300), nullable=True)
     location = Column(String(500), nullable=True)
     features = Column(Text, nullable=True)  # comma-separated treatment features
+    # Ayushman Bharat related fields
+    is_ayushman = Column(Boolean, default=False)  # Whether treatment is covered under Ayushman Bharat
+    Includes = Column(Text, nullable=True)  # What is included in the treatment
+    excludes = Column(Text, nullable=True)  # What is excluded from the treatment
     # Simple FAQ fields
     faq1_question = Column(Text, nullable=True)
     faq1_answer = Column(Text, nullable=True)
@@ -341,13 +347,12 @@ class PartnerHospital(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(300), nullable=False, index=True)  # Hospital name
     logo_url = Column(String(1000), nullable=True)  # Hospital logo URL
-    website_url = Column(String(1000), nullable=True)  # Hospital website
-    description = Column(Text, nullable=True)  # Brief description
-    location = Column(String(500), nullable=True)  # Hospital location
-    position = Column(Integer, default=0)  # For ordering partners
-    is_active = Column(Boolean, default=True)  # Active status
+    hospital_id = Column(Integer, ForeignKey("hospitals.id", ondelete="SET NULL"), nullable=True)  # Link to Hospital
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to Hospital
+    hospital = relationship("Hospital", foreign_keys=[hospital_id], lazy="noload")
 
 
 class PatientStory(Base):
