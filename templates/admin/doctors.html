@@ -143,6 +143,18 @@
                             {% else %}
                                 <span class="text-muted">No hospital assigned</span>
                             {% endif %}
+                            
+                            <!-- Display associated hospitals -->
+                            {% if doctor.hospitals and doctor.hospitals|length > 0 %}
+                                <div class="mt-2">
+                                    <small class="text-muted">Also at:</small>
+                                    {% for hospital in doctor.hospitals %}
+                                        {% if doctor.hospital is none or hospital.id != doctor.hospital.id %}
+                                            <span class="badge bg-secondary">{{ hospital.name }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </td>
                         <td>
                             {% if doctor.experience_years %}

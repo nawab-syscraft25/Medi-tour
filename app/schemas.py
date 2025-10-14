@@ -212,6 +212,7 @@ class DoctorBase(BaseModel):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    time_slots: Optional[str] = None  # JSON string containing availability for each day of the week
     is_featured: bool = False
     is_active: bool = True
     
@@ -259,7 +260,7 @@ class DoctorBase(BaseModel):
 
 
 class DoctorCreate(DoctorBase):
-    pass
+    associated_hospitals: Optional[List[int]] = None
 
 
 class DoctorUpdate(BaseModel):
@@ -280,8 +281,10 @@ class DoctorUpdate(BaseModel):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    time_slots: Optional[str] = None  # JSON string containing availability for each day of the week
     is_featured: Optional[bool] = None
     is_active: Optional[bool] = None
+    associated_hospitals: Optional[List[int]] = None
     
     @validator('experience_years', pre=True, always=True)
     def validate_experience_years(cls, v):
@@ -345,6 +348,7 @@ class DoctorResponse(BaseSchema):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
+    time_slots: Optional[str] = None  # JSON string containing availability for each day of the week
     is_featured: bool = False
     is_active: bool = True
     created_at: datetime
@@ -361,6 +365,8 @@ class DoctorResponse(BaseSchema):
     faq4_answer: Optional[str] = None
     faq5_question: Optional[str] = None
     faq5_answer: Optional[str] = None
+    # Associated hospitals
+    associated_hospitals: Optional[List[dict]] = None
     
     @property
     def skills_list(self) -> List[str]:

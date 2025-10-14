@@ -104,6 +104,8 @@ class Doctor(Base):
     qualifications = Column(Text, nullable=True)   # detailed qualifications
     highlights = Column(Text, nullable=True)
     awards = Column(Text, nullable=True)
+    # Time slots for doctor availability
+    time_slots = Column(Text, nullable=True)  # JSON string containing availability for each day of the week
     # Simple FAQ fields
     faq1_question = Column(Text, nullable=True)
     faq1_answer = Column(Text, nullable=True)

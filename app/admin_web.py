@@ -20,6 +20,8 @@ import uuid
 import csv
 import io
 from datetime import datetime, timedelta
+import re
+import html
 
 from app.dependencies import get_db
 from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User
@@ -37,16 +39,66 @@ def nl2br(value):
         return value
     return value.replace('\n', '<br>').replace('\r\n', '<br>')
 
-def linebreaks(value):
-    """Convert newlines to <br> tags and wrap in paragraphs if needed"""
+def from_json(value):
+    """Parse JSON string to dict"""
     if not value:
-        return value
-    # Replace newlines with <br> tags
-    return value.replace('\n', '<br>').replace('\r\n', '<br>')
+        return {}
+    try:
+        return json.loads(value)
+    except:
+        return {}
 
-# Register the filter
+def time_to_input_format(time_str):
+    """Convert time format for input (HH:MM AM/PM to HH:MM)"""
+    if not time_str:
+        return ''
+    try:
+        # Split time and modifier
+        parts = time_str.split(' ')
+        if len(parts) < 2:
+            return ''
+        time_part = parts[0]
+        modifier = parts[1]
+        
+        # Split hours and minutes
+        time_parts = time_part.split(':')
+        if len(time_parts) < 2:
+            return ''
+        hours = int(time_parts[0])
+        minutes = time_parts[1]
+        
+        # Convert to 24-hour format
+        if modifier.upper() == 'PM' and hours != 12:
+            hours += 12
+        elif modifier.upper() == 'AM' and hours == 12:
+            hours = 0
+            
+        return f'{hours:02d}:{minutes}'
+    except:
+        return ''
+
+def get_time_from_slots(time_slots, day, type):
+    """Extract start or end time from time slots JSON for a specific day"""
+    if not time_slots:
+        return ''
+    try:
+        slots = json.loads(time_slots)
+        day_key = day  # day_names[day] in the template
+        if day_key in slots and slots[day_key] != 'Off':
+            times = slots[day_key].split(' - ')
+            if type == 'start' and len(times) >= 1:
+                return time_to_input_format(times[0])
+            elif type == 'end' and len(times) >= 2:
+                return time_to_input_format(times[1])
+    except:
+        pass
+    return ''
+
+# Add custom filters to Jinja2 environment
 templates.env.filters['nl2br'] = nl2br
-templates.env.filters['linebreaks'] = linebreaks
+templates.env.filters['from_json'] = from_json
+templates.env.filters['time_to_input_format'] = time_to_input_format
+templates.env.globals['get_time_from_slots'] = get_time_from_slots
 
 def render_template(name: str, context: dict):
     """Helper function to render templates with common context"""
@@ -529,8 +581,11 @@ async def admin_doctors(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    # Build query with filters
-    query = select(Doctor).options(selectinload(Doctor.hospital))
+    # Build query with filters - use selectinload to load associated hospitals
+    query = select(Doctor).options(
+        selectinload(Doctor.hospital),
+        selectinload(Doctor.hospitals)
+    )
     count_query = select(func.count(Doctor.id))
     
     # Apply filters
@@ -2068,7 +2123,15 @@ async def admin_doctor_edit(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
+    # Use selectinload to properly load associated hospitals
+    result = await db.execute(
+        select(Doctor)
+        .options(
+            selectinload(Doctor.hospitals),
+            selectinload(Doctor.hospital)
+        )
+        .where(Doctor.id == doctor_id)
+    )
     doctor = result.scalar_one_or_none()
     
     if not doctor:
@@ -2677,7 +2740,9 @@ async def admin_doctor_create(
     qualifications: str = Form(""),
     highlights: str = Form(""),
     awards: str = Form(""),
+    time_slots: str = Form(""),
     is_featured: bool = Form(False),
+    associated_hospitals: List[int] = Form(default=[]),
     faq1_question: str = Form(""),
     faq1_answer: str = Form(""),
     faq2_question: str = Form(""),
@@ -2707,6 +2772,29 @@ async def admin_doctor_create(
         if profile_photo and profile_photo.filename:
             profile_photo_filename = await save_uploaded_file(profile_photo, "doctor")
         
+        # Debug: Print FAQ data received
+        print(f"DEBUG DOCTOR: faq1_question: {faq1_question}")
+        print(f"DEBUG DOCTOR: faq1_answer: {faq1_answer}")
+        print(f"DEBUG DOCTOR: faq2_question: {faq2_question}")
+        print(f"DEBUG DOCTOR: faq2_answer: {faq2_answer}")
+        print(f"DEBUG DOCTOR: faq3_question: {faq3_question}")
+        print(f"DEBUG DOCTOR: faq3_answer: {faq3_answer}")
+        print(f"DEBUG DOCTOR: faq4_question: {faq4_question}")
+        print(f"DEBUG DOCTOR: faq4_answer: {faq4_answer}")
+        print(f"DEBUG DOCTOR: faq5_question: {faq5_question}")
+        print(f"DEBUG DOCTOR: faq5_answer: {faq5_answer}")
+        print(f"DEBUG DOCTOR: time_slots: {time_slots}")
+        print(f"DEBUG DOCTOR: associated_hospitals: {associated_hospitals}")
+        
+        # Validate time_slots JSON if provided
+        if time_slots:
+            try:
+                import json
+                json.loads(time_slots)
+                print(f"DEBUG DOCTOR: time_slots is valid JSON")
+            except json.JSONDecodeError as e:
+                print(f"DEBUG DOCTOR: time_slots is invalid JSON: {e}")
+        
         # Create doctor object
         doctor = Doctor(
             name=name,
@@ -2725,6 +2813,7 @@ async def admin_doctor_create(
             qualifications=parse_comma_separated_string(qualifications),
             highlights=parse_comma_separated_string(highlights),
             awards=parse_comma_separated_string(awards),
+            time_slots=time_slots or None,
             profile_photo=f"/media/doctor/{profile_photo_filename}" if profile_photo_filename else None,
             is_featured=is_featured,
             created_at=datetime.now()
@@ -2732,6 +2821,20 @@ async def admin_doctor_create(
         
         db.add(doctor)
         await db.flush()  # Get doctor ID
+        print(f"DEBUG DOCTOR: Created doctor with ID {doctor.id}")
+        print(f"DEBUG DOCTOR: time_slots value: {doctor.time_slots}")
+        
+        # Handle associated hospitals
+        if associated_hospitals:
+            # Get hospital objects
+            hospitals_result = await db.execute(
+                select(Hospital).where(Hospital.id.in_(associated_hospitals))
+            )
+            hospitals = hospitals_result.scalars().all()
+            
+            # Associate hospitals with doctor
+            doctor.hospitals = hospitals
+            print(f"DEBUG DOCTOR: Associated {len(hospitals)} hospitals with doctor")
         
         # Handle image uploads
         image_count = 0
@@ -2760,8 +2863,18 @@ async def admin_doctor_create(
         doctor.faq4_answer = faq4_answer.strip() if faq4_answer else None
         doctor.faq5_question = faq5_question.strip() if faq5_question else None
         doctor.faq5_answer = faq5_answer.strip() if faq5_answer else None
-        
+        print(f"DEBUG DOCTOR: Updated FAQ fields for doctor {doctor.id}")
+
         await db.commit()
+        print(f"DEBUG DOCTOR: Data committed successfully")
+        print(f"DEBUG DOCTOR: Final time_slots value in database: {doctor.time_slots}")
+        
+        # Verify FAQs were saved
+        verify_faqs = (await db.execute(select(FAQ).where(FAQ.owner_type == "doctor", FAQ.owner_id == doctor.id))).scalars().all()
+        print(f"DEBUG DOCTOR: Verification - Found {len(verify_faqs)} FAQs in database after commit")
+        for i, faq in enumerate(verify_faqs):
+            print(f"DEBUG DOCTOR: Verification FAQ {i+1}: Q='{faq.question}', A='{faq.answer}'")
+        
         return RedirectResponse(url="/admin/doctors", status_code=302)
         
     except Exception as e:
@@ -2799,7 +2912,9 @@ async def admin_doctor_update(
     qualifications: str = Form(""),
     highlights: str = Form(""),
     awards: str = Form(""),
+    time_slots: str = Form(""),
     is_featured: bool = Form(False),
+    associated_hospitals: List[int] = Form(default=[]),
     faq1_question: str = Form(""),
     faq1_answer: str = Form(""),
     faq2_question: str = Form(""),
@@ -2812,10 +2927,10 @@ async def admin_doctor_update(
     faq5_answer: str = Form(""),
     profile_photo: UploadFile = File(default=None),
     images: List[UploadFile] = File(default=[]),
+    delete_profile_photo: str = Form(None),
     delete_image_id: str = Form(None),
     update_image_order: str = Form(None),
     image_order: str = Form(None),
-    delete_profile_photo: str = Form(None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -2832,7 +2947,18 @@ async def admin_doctor_update(
     print(f"DEBUG DOCTOR: delete_image_id: {delete_image_id}")
     print(f"DEBUG DOCTOR: update_image_order: {update_image_order}")
     print(f"DEBUG DOCTOR: delete_profile_photo: {delete_profile_photo}")
+    print(f"DEBUG DOCTOR: time_slots: {time_slots}")
+    print(f"DEBUG DOCTOR: associated_hospitals: {associated_hospitals}")
     print(f"DEBUG DOCTOR: Request headers: {dict(request.headers)}")
+    
+    # Validate time_slots JSON if provided
+    if time_slots:
+        try:
+            import json
+            json.loads(time_slots)
+            print(f"DEBUG DOCTOR: time_slots is valid JSON")
+        except json.JSONDecodeError as e:
+            print(f"DEBUG DOCTOR: time_slots is invalid JSON: {e}")
     
     try:
         # Get existing doctor
@@ -2842,66 +2968,79 @@ async def admin_doctor_update(
         if not doctor:
             raise HTTPException(status_code=404, detail="Doctor not found")
         
-        # Handle profile photo upload
+        print(f"DEBUG DOCTOR: Found existing doctor with ID {doctor.id}")
+        print(f"DEBUG DOCTOR: Existing time_slots value: {doctor.time_slots}")
+        
+        # Handle profile photo deletion
+        if delete_profile_photo:
+            print(f"Deleting profile photo for doctor {doctor_id}")
+            doctor.profile_photo = None
+        
+        # Handle profile photo update
         if profile_photo and profile_photo.filename:
             profile_photo_filename = await save_uploaded_file(profile_photo, "doctor")
             doctor.profile_photo = f"/media/doctor/{profile_photo_filename}"
         
-        # Handle AJAX image operations
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            # Handle profile photo deletion
-            if delete_profile_photo == 'true':
-                print(f"Processing profile photo deletion for doctor ID: {doctor_id}")
-                if doctor.profile_photo:
-                    doctor.profile_photo = None
-                    await db.commit()
-                    print(f"Successfully deleted profile photo for doctor {doctor_id}")
-                    return {"success": True, "message": "Profile photo deleted successfully"}
-                else:
-                    print(f"No profile photo found for doctor {doctor_id}")
-                    return {"success": False, "message": "No profile photo to delete"}
-            
-            # Handle image deletion
-            if delete_image_id and delete_image_id.isdigit():
-                print(f"Processing image deletion for image ID: {delete_image_id}, doctor ID: {doctor_id}")
+        # Handle image deletion
+        if delete_image_id:
+            try:
                 image_id = int(delete_image_id)
-                # Get the image to delete
-                result = await db.execute(
-                    select(Image)
-                    .where(Image.id == image_id, Image.owner_type == "doctor", Image.owner_id == doctor_id)
-                )
-                image_to_delete = result.scalar_one_or_none()
+                print(f"Deleting image {image_id} for doctor {doctor_id}")
                 
-                if image_to_delete:
-                    await db.delete(image_to_delete)
-                    await db.commit()
-                    print(f"Successfully deleted image {image_id}")
-                    return {"success": True, "message": "Image deleted successfully"}
-                else:
-                    print(f"Image {image_id} not found")
-                    return {"success": False, "message": "Image not found"}
-            
-            # Handle image reordering
-            if update_image_order and image_order:
-                try:
-                    order_data = json.loads(image_order)
-                    print(f"Processing image reordering for doctor {doctor_id}: {order_data}")
+                await db.execute(
+                    delete(Image).where(
+                        Image.id == image_id,
+                        Image.owner_type == "doctor",
+                        Image.owner_id == doctor_id
+                    )
+                )
+                await db.commit()
+                return {"success": True, "message": "Image deleted successfully"}
+            except ValueError:
+                return {"success": False, "message": "Invalid image ID"}
+        
+        # Handle image reordering
+        if update_image_order and image_order:
+            try:
+                order_data = json.loads(image_order)
+                print(f"Processing image reordering for doctor {doctor_id}: {order_data}")
+                
+                for item in order_data:
+                    image_id = item['id']
+                    new_position = item['position']
                     
-                    for item in order_data:
-                        image_id = item['id']
-                        new_position = item['position']
-                        
-                        await db.execute(
-                            update(Image)
-                            .where(Image.id == image_id, Image.owner_type == "doctor", Image.owner_id == doctor_id)
-                            .values(position=new_position)
-                        )
+                    await db.execute(
+                        update(Image)
+                        .where(Image.id == image_id, Image.owner_type == "doctor", Image.owner_id == doctor_id)
+                        .values(position=new_position)
+                    )
+                
+                await db.commit()
+                print(f"Successfully updated image positions for doctor {doctor_id}")
+                return {"success": True, "message": "Image order updated successfully"}
+            except json.JSONDecodeError:
+                return {"success": False, "message": "Invalid image order data"}
+        
+        # Handle new image uploads
+        for image_file in images:
+            if image_file and image_file.filename:
+                filename = await save_uploaded_file(image_file, "doctor")
+                if filename:
+                    # Get current max position
+                    max_pos_result = await db.execute(
+                        select(func.coalesce(func.max(Image.position), -1))
+                        .where(Image.owner_type == "doctor", Image.owner_id == doctor_id)
+                    )
+                    max_position = max_pos_result.scalar_one()
                     
-                    await db.commit()
-                    print(f"Successfully updated image positions for doctor {doctor_id}")
-                    return {"success": True, "message": "Image order updated successfully"}
-                except json.JSONDecodeError:
-                    return {"success": False, "message": "Invalid image order data"}
+                    image = Image(
+                        owner_type="doctor",
+                        owner_id=doctor_id,
+                        url=f"/media/doctor/{filename}",
+                        is_primary=False,  # New images are not primary by default
+                        position=max_position + 1
+                    )
+                    db.add(image)
         
         # Create and validate the update data using Pydantic schema
         update_data = DoctorUpdate(
@@ -2909,18 +3048,20 @@ async def admin_doctor_update(
             designation=designation or None,
             hospital_id=int(hospital_id) if hospital_id and hospital_id.strip() else None,
             location=location or None,
-            experience_years=experience_years,
-            rating=rating,
+            experience_years=int(experience_years) if experience_years and experience_years.strip() else None,
+            rating=float(rating) if rating and rating.strip() else None,
             gender=gender or None,
             short_description=short_description or None,
             long_description=long_description or None,
             specialization=specialization or None,
             qualification=qualification or None,
-            consultancy_fee=consultancy_fee,
+            consultancy_fee=float(consultancy_fee) if consultancy_fee and consultancy_fee.strip() else None,
             skills=parse_comma_separated_string(skills),
             qualifications=parse_comma_separated_string(qualifications),
             highlights=parse_comma_separated_string(highlights),
-            awards=parse_comma_separated_string(awards)
+            awards=parse_comma_separated_string(awards),
+            time_slots=time_slots or None,
+            is_featured=is_featured
         )
         
         # Update doctor fields
@@ -2940,35 +3081,28 @@ async def admin_doctor_update(
         doctor.qualifications = update_data.qualifications
         doctor.highlights = update_data.highlights
         doctor.awards = update_data.awards
-        doctor.is_featured = is_featured
+        doctor.time_slots = update_data.time_slots
+        doctor.is_featured = update_data.is_featured
         
-        # Handle new image uploads
-        # Get current image count for this doctor
-        existing_images_result = await db.execute(
-            select(func.count(Image.id)).where(
-                Image.owner_type == "doctor",
-                Image.owner_id == doctor.id
+        print(f"DEBUG DOCTOR: Updated doctor.time_slots to: {doctor.time_slots}")
+        
+        # Handle associated hospitals
+        if associated_hospitals:
+            # Get hospital objects
+            hospitals_result = await db.execute(
+                select(Hospital).where(Hospital.id.in_(associated_hospitals))
             )
-        )
-        image_count = existing_images_result.scalar() or 0
+            hospitals = hospitals_result.scalars().all()
+            
+            # Associate hospitals with doctor
+            doctor.hospitals = hospitals
+            print(f"DEBUG DOCTOR: Associated {len(hospitals)} hospitals with doctor")
+        else:
+            # Clear all hospital associations if none selected
+            doctor.hospitals = []
+            print(f"DEBUG DOCTOR: Cleared all hospital associations")
         
-        for image_file in images:
-            if image_file and image_file.filename:
-                filename = await save_uploaded_file(image_file, "doctor")
-                if filename:
-                    image = Image(
-                        owner_type="doctor",
-                        owner_id=doctor.id,
-                        url=f"/media/doctor/{filename}",
-                        is_primary=image_count == 0,
-                        position=image_count
-                    )
-                    db.add(image)
-                    image_count += 1
-
-        # Handle FAQ updates - remove existing FAQs and create new ones
-        print(f"DEBUG DOCTOR: Deleting existing FAQs for doctor {doctor.id}")
-        # Update FAQ fields directly on doctor model
+        # Update FAQ fields
         doctor.faq1_question = faq1_question.strip() if faq1_question else None
         doctor.faq1_answer = faq1_answer.strip() if faq1_answer else None
         doctor.faq2_question = faq2_question.strip() if faq2_question else None
@@ -2983,6 +3117,7 @@ async def admin_doctor_update(
 
         await db.commit()
         print(f"DEBUG DOCTOR: Data committed successfully")
+        print(f"DEBUG DOCTOR: Final time_slots value in database: {doctor.time_slots}")
         
         # Verify FAQs were saved
         verify_faqs = (await db.execute(select(FAQ).where(FAQ.owner_type == "doctor", FAQ.owner_id == doctor.id))).scalars().all()
