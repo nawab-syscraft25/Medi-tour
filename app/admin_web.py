@@ -4541,27 +4541,61 @@ async def admin_banner_edit(
 async def admin_banner_update(
     request: Request,
     banner_id: int,
+    name: str = Form(...),
+    title: str = Form(""),
+    subtitle: str = Form(""),
+    description: str = Form(""),
+    link_url: str = Form(""),
+    button_text: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    banner_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update a banner"""
+    """Update banner"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    form = await request.form()
-    banner = await db.get(Banner, banner_id)
-    if not banner:
+    try:
+        # Get existing banner
+        result = await db.execute(select(Banner).where(Banner.id == banner_id))
+        banner = result.scalar_one_or_none()
+        
+        if not banner:
+            raise HTTPException(status_code=404, detail="Banner not found")
+        
+        # Handle image upload
+        if banner_image and banner_image.filename:
+            filename = await save_uploaded_file(banner_image, "banner")
+            banner.image_url = f"/media/banner/{filename}"
+        
+        # Update banner fields
+        banner.name = name
+        banner.title = title or None
+        banner.subtitle = subtitle or None
+        banner.description = description or None
+        banner.link_url = link_url or None
+        banner.button_text = button_text or None
+        banner.position = position
+        banner.is_active = is_active
+        banner.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
         return RedirectResponse(url="/admin/banners", status_code=302)
-    
-    banner.title = form["title"]
-    banner.description = form["description"]
-    banner.image_url = form["image_url"]
-    banner.position = int(form["position"])
-    await db.commit()
-    await db.refresh(banner)
-    
-    return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating banner: {str(e)}")
+        return render_template("admin/banner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "banner": banner,
+            "error": f"Error updating banner: {str(e)}"
+        })
 
 
 @router.post("/admin/banners/{banner_id}/delete", response_class=HTMLResponse)
@@ -4704,81 +4738,155 @@ async def admin_partner_delete(
     })
 
 
+# DEPRECATED: This implementation is outdated and inconsistent
+# Use the form-based implementation at line 5157 instead
 @router.post("/admin/banners/new", response_class=HTMLResponse)
 async def admin_banner_create(
     request: Request,
+    name: str = Form(...),
+    title: str = Form(""),
+    subtitle: str = Form(""),
+    description: str = Form(""),
+    link_url: str = Form(""),
+    button_text: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    banner_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create new banner"""
+    """Create new banner (deprecated - use form-based version)"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    form = await request.form()
-    banner = Banner(
-        title=form["title"],
-        description=form["description"],
-        image=form["image"],
-        position=int(form["position"]),
-        link=form["link"],
-    )
-    db.add(banner)
-    await db.commit()
-    await db.refresh(banner)
-    
-    return RedirectResponse(url="/admin/banners", status_code=302)
+    try:
+        # Handle image upload
+        image_url = None
+        if banner_image and banner_image.filename:
+            filename = await save_uploaded_file(banner_image, "banner")
+            image_url = f"/media/banner/{filename}"
+        
+        # Create banner
+        banner = Banner(
+            name=name,
+            title=title or None,
+            subtitle=subtitle or None,
+            description=description or None,
+            image_url=image_url,
+            link_url=link_url or None,
+            button_text=button_text or None,
+            position=position,
+            is_active=is_active
+        )
+        
+        db.add(banner)
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error creating banner: {str(e)}")
+        return render_template("admin/banner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Create",
+            "banner": None,
+            "error": f"Error creating banner: {str(e)}"
+        })
 
 
-@router.get("/admin/banners/{banner_id}", response_class=HTMLResponse)
+# DEPRECATED: This implementation is outdated
+# Use the form-based implementation at line 5130 instead
+@router.get("/admin/banners/{banner_id}/edit", response_class=HTMLResponse)
 async def admin_banner_edit(
     request: Request,
     banner_id: int,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Edit banner page"""
+    """Edit banner form (deprecated - use form-based version)"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    banner = await db.get(Banner, banner_id)
-    if not banner:
-        return RedirectResponse(url="/admin/banners", status_code=302)
+    # Get banner
+    result = await db.execute(select(Banner).where(Banner.id == banner_id))
+    banner = result.scalar_one_or_none()
     
-    return render_template("admin/banner_edit.html", {
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    return render_template("admin/banner_form.html", {
         "request": request,
         "admin": admin,
-        "banner": banner,
+        "action": "Edit",
+        "banner": banner
     })
 
 
+# DEPRECATED: This implementation is outdated and inconsistent
+# Use the form-based implementation at line 5009 instead
 @router.post("/admin/banners/{banner_id}", response_class=HTMLResponse)
 async def admin_banner_update(
     request: Request,
     banner_id: int,
+    name: str = Form(...),
+    title: str = Form(""),
+    subtitle: str = Form(""),
+    description: str = Form(""),
+    link_url: str = Form(""),
+    button_text: str = Form(""),
+    position: int = Form(0),
+    is_active: bool = Form(False),
+    banner_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update banner"""
+    """Update banner (deprecated - use form-based version)"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    form = await request.form()
-    banner = await db.get(Banner, banner_id)
-    if not banner:
+    try:
+        # Get existing banner
+        result = await db.execute(select(Banner).where(Banner.id == banner_id))
+        banner = result.scalar_one_or_none()
+        
+        if not banner:
+            raise HTTPException(status_code=404, detail="Banner not found")
+        
+        # Handle image upload
+        if banner_image and banner_image.filename:
+            filename = await save_uploaded_file(banner_image, "banner")
+            banner.image_url = f"/media/banner/{filename}"
+        
+        # Update banner fields
+        banner.name = name
+        banner.title = title or None
+        banner.subtitle = subtitle or None
+        banner.description = description or None
+        banner.link_url = link_url or None
+        banner.button_text = button_text or None
+        banner.position = position
+        banner.is_active = is_active
+        banner.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
         return RedirectResponse(url="/admin/banners", status_code=302)
-    
-    banner.title = form["title"]
-    banner.description = form["description"]
-    banner.image = form["image"]
-    banner.position = int(form["position"])
-    banner.link = form["link"]
-    await db.commit()
-    await db.refresh(banner)
-    
-    return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating banner: {str(e)}")
+        return render_template("admin/banner_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "banner": banner,
+            "error": f"Error updating banner: {str(e)}"
+        })
 
 
 @router.post("/admin/banners/{banner_id}/delete", response_class=HTMLResponse)

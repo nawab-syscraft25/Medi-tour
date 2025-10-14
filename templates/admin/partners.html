@@ -34,8 +34,8 @@
                             <strong>{{ partner.name }}</strong>
                         </td>
                         <td>
-                            {% if partner.hospital %}
-                            <span class="badge bg-info">{{ partner.hospital.name }}</span>
+                            {% if partner.hospital_id %}
+                            <span class="badge bg-info">{{ partner.hospital.name if partner.hospital else 'Unknown' }}</span>
                             {% else %}
                             <span class="text-muted">Not associated</span>
                             {% endif %}
