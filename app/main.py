@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import os
 
 from app.core.config import settings
-
+from app.db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app import models
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -91,6 +94,23 @@ async def root():
     }
 
 
+# Configure Jinja2 templates
+templates = Jinja2Templates(directory="templates")
+
+# Add a route for the booking page
+@app.get("/book", response_class=HTMLResponse)
+async def book_appointment(request: Request, db: AsyncSession = Depends(get_db)):
+    """Serve the appointment booking page"""
+    # Get all doctors
+    result = await db.execute(select(models.Doctor).order_by(models.Doctor.name))
+    doctors = result.scalars().all()
+    
+    return templates.TemplateResponse("book_appointment.html", {
+        "request": request,
+        "doctors": doctors
+    })
+
+
 # Include API routes
 from app.api.v1 import api_router
 
@@ -110,10 +130,6 @@ app.add_api_route("/api/filters/specializations", get_specializations, methods=[
 from app.admin_web import router as admin_router
 
 app.include_router(admin_router)
-
-
-# Configure Jinja2 templates
-templates = Jinja2Templates(directory="templates")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

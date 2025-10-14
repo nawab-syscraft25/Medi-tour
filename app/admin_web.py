@@ -4867,6 +4867,227 @@ async def admin_users(
         "recent_users": recent_users
     })
 
+
+@router.get("/admin/appointments", response_class=HTMLResponse)
+async def admin_appointments_list(
+    request: Request,
+    page: int = 1,
+    search: Optional[str] = None,
+    doctor_id: Optional[int] = None,
+    status: Optional[str] = None,
+    payment_status: Optional[str] = None,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Appointment management page"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    limit = 15
+    offset = (page - 1) * limit
+    
+    # Build query
+    query = select(Appointment).options(selectinload(Appointment.doctor))
+    
+    # Apply filters
+    if search:
+        search_term = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                Appointment.patient_name.ilike(search_term),
+                Appointment.patient_contact.ilike(search_term)
+            )
+        )
+    
+    if doctor_id:
+        query = query.where(Appointment.doctor_id == doctor_id)
+    
+    if status:
+        query = query.where(Appointment.status == status)
+    
+    if payment_status:
+        query = query.where(Appointment.payment_status == payment_status)
+    
+    # Get total count
+    count_query = select(func.count(Appointment.id))
+    total = await db.scalar(count_query)
+    total_pages = (total + limit - 1) // limit
+    
+    # Apply pagination
+    query = query.order_by(desc(Appointment.created_at)).offset(offset).limit(limit)
+    result = await db.execute(query)
+    appointments = result.scalars().all()
+    
+    # Get doctors for filter dropdown
+    doctors_result = await db.execute(select(Doctor).order_by(Doctor.name))
+    doctors = doctors_result.scalars().all()
+    
+    return templates.TemplateResponse("admin/appointments.html", {
+        "request": request,
+        "admin": admin,
+        "appointments": appointments,
+        "doctors": doctors,
+        "current_page": page,
+        "total_pages": total_pages,
+        "search": search,
+        "doctor_id": doctor_id,
+        "status": status,
+        "payment_status": payment_status
+    })
+
+
+@router.get("/admin/appointments/{appointment_id}/payment", response_class=HTMLResponse)
+async def admin_appointment_payment(
+    request: Request,
+    appointment_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Redirect to payment page for an appointment"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    return RedirectResponse(url=f"/api/v1/appointments/{appointment_id}/payment", status_code=302)
+
+
+@router.get("/admin/appointments/{appointment_id}/edit", response_class=HTMLResponse)
+async def admin_appointment_edit(
+    request: Request,
+    appointment_id: int,
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit appointment form"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    result = await db.execute(
+        select(Appointment)
+        .options(selectinload(Appointment.doctor))
+        .where(Appointment.id == appointment_id)
+    )
+    appointment = result.scalar_one_or_none()
+    
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Get doctors for dropdown
+    doctors_result = await db.execute(select(Doctor).order_by(Doctor.name))
+    doctors = doctors_result.scalars().all()
+    
+    return templates.TemplateResponse("admin/appointment_form.html", {
+        "request": request,
+        "admin": admin,
+        "appointment": appointment,
+        "doctors": doctors,
+        "action": "edit"
+    })
+
+
+@router.post("/admin/appointments/{appointment_id}")
+async def admin_appointment_update(
+    request: Request,
+    appointment_id: int,
+    patient_name: str = Form(...),
+    patient_contact: str = Form(...),
+    doctor_id: Optional[int] = Form(None),
+    scheduled_at: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("scheduled"),
+    consultation_fees: Optional[float] = Form(None),
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update existing appointment"""
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        result = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
+        appointment = result.scalar_one_or_none()
+        
+        if not appointment:
+            raise HTTPException(status_code=404, detail="Appointment not found")
+        
+        # Parse datetime if provided
+        scheduled_datetime = None
+        if scheduled_at and scheduled_at.strip():
+            try:
+                scheduled_datetime = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        
+        # Update appointment
+        appointment.patient_name = patient_name
+        appointment.patient_contact = patient_contact
+        appointment.doctor_id = doctor_id
+        appointment.scheduled_at = scheduled_datetime
+        appointment.notes = notes or None
+        appointment.status = status
+        appointment.consultation_fees = consultation_fees
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/appointments", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        # Get doctors for dropdown
+        doctors_result = await db.execute(select(Doctor).order_by(Doctor.name))
+        doctors = doctors_result.scalars().all()
+        
+        return templates.TemplateResponse("admin/appointment_form.html", {
+            "request": request,
+            "admin": admin,
+            "appointment": appointment,
+            "doctors": doctors,
+            "action": "edit",
+            "error": f"Error updating appointment: {str(e)}"
+        })
+
+
+@router.post("/admin/appointments/{appointment_id}/payment-action")
+async def admin_appointment_payment_action(
+    request: Request,
+    appointment_id: int,
+    action: str = Form(...),  # refund, cancel, etc.
+    session_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Handle payment actions for appointments"""
+    admin = await get_current_admin_object(session_token, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    result = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    try:
+        if action == "refund" and appointment.payment_status == "completed":
+            # Here you would implement the actual refund logic with Razorpay
+            # For now, we'll just update the status
+            appointment.payment_status = "refunded"
+            await db.commit()
+            return {"message": "Payment refund initiated successfully"}
+        elif action == "cancel":
+            appointment.status = "cancelled"
+            await db.commit()
+            return {"message": "Appointment cancelled successfully"}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action or appointment status")
+            
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error processing payment action: {str(e)}")
+
+
 @router.get("/admin/users/{user_id}")
 async def get_user_details(
     user_id: int,

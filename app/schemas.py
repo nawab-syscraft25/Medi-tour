@@ -548,9 +548,15 @@ class AppointmentBase(BaseModel):
     patient_name: Optional[str] = None
     patient_contact: Optional[str] = None
     doctor_id: Optional[int] = None
+    hospital_preference: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     notes: Optional[str] = None
     status: str = "scheduled"
+    consultation_fees: Optional[float] = None
+    payment_status: str = "pending"
+    payment_id: Optional[str] = None
+    payment_order_id: Optional[str] = None
+    payment_signature: Optional[str] = None
 
 
 class AppointmentCreate(AppointmentBase):
@@ -561,9 +567,15 @@ class AppointmentUpdate(BaseModel):
     patient_name: Optional[str] = None
     patient_contact: Optional[str] = None
     doctor_id: Optional[int] = None
+    hospital_preference: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    consultation_fees: Optional[float] = None
+    payment_status: Optional[str] = None
+    payment_id: Optional[str] = None
+    payment_order_id: Optional[str] = None
+    payment_signature: Optional[str] = None
 
 
 class AppointmentResponse(AppointmentBase, BaseSchema):

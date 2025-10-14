@@ -1,0 +1,139 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ action.title() }} Appointment{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>{{ action.title() }} Appointment</h2>
+        <a href="/admin/appointments" class="btn btn-secondary">Back to Appointments</a>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        {{ error }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Appointment Details</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="patient_name" class="form-label">Patient Name *</label>
+                            <input type="text" class="form-control" id="patient_name" name="patient_name" value="{{ appointment.patient_name or '' }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="patient_contact" class="form-label">Patient Contact *</label>
+                            <input type="text" class="form-control" id="patient_contact" name="patient_contact" value="{{ appointment.patient_contact or '' }}" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="doctor_id" class="form-label">Doctor</label>
+                            <select class="form-select" id="doctor_id" name="doctor_id">
+                                <option value="">Select Doctor</option>
+                                {% for doctor in doctors %}
+                                <option value="{{ doctor.id }}" {% if appointment.doctor_id == doctor.id %}selected{% endif %}>{{ doctor.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="scheduled_at" class="form-label">Scheduled At</label>
+                            <input type="datetime-local" class="form-control" id="scheduled_at" name="scheduled_at" 
+                                   value="{% if appointment.scheduled_at %}{{ appointment.scheduled_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="consultation_fees" class="form-label">Consultation Fees (₹)</label>
+                            <input type="number" class="form-control" id="consultation_fees" name="consultation_fees" 
+                                   step="0.01" min="0" value="{{ appointment.consultation_fees or '' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="scheduled" {% if appointment.status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                                <option value="confirmed" {% if appointment.status == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                                <option value="completed" {% if appointment.status == 'completed' %}selected{% endif %}>Completed</option>
+                                <option value="cancelled" {% if appointment.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="notes" class="form-label">Notes</label>
+                    <textarea class="form-control" id="notes" name="notes" rows="4">{{ appointment.notes or '' }}</textarea>
+                </div>
+
+                {% if appointment.id %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Payment Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Payment Status:</strong> 
+                                    <span class="badge bg-{% if appointment.payment_status == 'completed' %}success{% elif appointment.payment_status == 'pending' %}warning{% elif appointment.payment_status == 'failed' %}danger{% elif appointment.payment_status == 'refunded' %}secondary{% else %}secondary{% endif %}">
+                                        {{ appointment.payment_status.title() }}
+                                    </span>
+                                </p>
+                                <p><strong>Consultation Fees:</strong> 
+                                    {% if appointment.consultation_fees %}
+                                        ₹{{ "%.2f"|format(appointment.consultation_fees) }}
+                                    {% else %}
+                                        Not set
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                {% if appointment.payment_id %}
+                                <p><strong>Payment ID:</strong> {{ appointment.payment_id }}</p>
+                                {% endif %}
+                                {% if appointment.payment_order_id %}
+                                <p><strong>Order ID:</strong> {{ appointment.payment_order_id }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if appointment.payment_status == 'completed' %}
+                        <form method="POST" action="/admin/appointments/{{ appointment.id }}/payment-action" onsubmit="return confirm('Are you sure you want to refund this payment?')">
+                            <input type="hidden" name="action" value="refund">
+                            <button type="submit" class="btn btn-warning">Refund Payment</button>
+                        </form>
+                        {% else %}
+                        <a href="/api/v1/appointments/{{ appointment.id }}/payment" class="btn btn-primary mt-2" target="_blank">Process Payment</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">Save Appointment</button>
+                    {% if appointment.id %}
+                    <a href="/admin/appointments" class="btn btn-secondary">Cancel</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

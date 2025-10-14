@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 30
     
+    # Razorpay Configuration
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[str] = None
+    
     # SMTP Email Configuration
     smtp_server: Optional[str] = "smtp.gmail.com"
     smtp_port: int = 587

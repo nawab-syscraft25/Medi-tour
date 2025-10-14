@@ -6,6 +6,7 @@ from typing import List, Optional
 import os
 import uuid
 from pathlib import Path
+import razorpay
 from app.db import get_db
 from app import models, schemas
 from app.dependencies import get_current_admin, get_current_user
@@ -654,6 +655,279 @@ async def delete_doctor(
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
+
+
+# ================================
+# APPOINTMENT ENDPOINTS WITH PAYMENT INTEGRATION
+# ================================
+
+@router.post("/appointments", response_model=schemas.AppointmentResponse)
+async def create_appointment(
+    appointment: schemas.AppointmentCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new appointment with optional payment integration"""
+    db_appointment = models.Appointment(**appointment.model_dump())
+    db.add(db_appointment)
+    await db.commit()
+    await db.refresh(db_appointment)
+    return db_appointment
+
+
+@router.get("/appointments", response_model=List[schemas.AppointmentResponse])
+async def get_appointments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    doctor_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all appointments (admin only)"""
+    query = select(models.Appointment)
+    
+    filters = []
+    if doctor_id:
+        filters.append(models.Appointment.doctor_id == doctor_id)
+    if status:
+        filters.append(models.Appointment.status == status)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.offset(skip).limit(limit).order_by(models.Appointment.created_at.desc())
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.get("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
+async def get_appointment(
+    appointment_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific appointment by ID"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return appointment
+
+
+@router.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
+async def update_appointment(
+    appointment_id: int,
+    appointment_update: schemas.AppointmentUpdate,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an appointment (admin only)"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    update_data = appointment_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(appointment, field, value)
+    
+    await db.commit()
+    await db.refresh(appointment)
+    return appointment
+
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    appointment_id: int,
+    current_admin: models.Admin = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete an appointment (admin only)"""
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    await db.delete(appointment)
+    await db.commit()
+    return {"message": "Appointment deleted successfully"}
+
+
+# ================================
+# PAYMENT PAGE ROUTE
+# ================================
+
+@router.get("/appointments/{appointment_id}/payment", response_class=HTMLResponse)
+async def payment_page(
+    appointment_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Display payment page for an appointment"""
+    # Get appointment details
+    result = await db.execute(
+        select(models.Appointment)
+        .options(selectinload(models.Appointment.doctor))
+        .where(models.Appointment.id == appointment_id)
+    )
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Get Razorpay key from environment
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "your_razorpay_key_id_here")
+    
+    return templates.TemplateResponse("payment.html", {
+        "request": request,
+        "appointment": appointment,
+        "doctor": appointment.doctor,
+        "razorpay_key_id": razorpay_key_id
+    })
+
+
+# ================================
+# BOOKING PAGE ROUTE
+# ================================
+
+@router.get("/book-appointment", response_class=HTMLResponse)
+async def book_appointment_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Display appointment booking page"""
+    # Get all doctors
+    result = await db.execute(select(models.Doctor).order_by(models.Doctor.name))
+    doctors = result.scalars().all()
+    
+    return templates.TemplateResponse("book_appointment.html", {
+        "request": request,
+        "doctors": doctors
+    })
+
+
+# ================================
+# RAZORPAY PAYMENT INTEGRATION
+# ================================
+
+@router.post("/appointments/{appointment_id}/create-payment-order")
+async def create_payment_order(
+    appointment_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a Razorpay order for appointment payment"""
+    # Get appointment details
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Check if consultation fees are set
+    if not appointment.consultation_fees or appointment.consultation_fees <= 0:
+        raise HTTPException(status_code=400, detail="Consultation fees not set for this appointment")
+    
+    try:
+        # Initialize Razorpay client
+        # Note: You need to set these environment variables
+        razorpay_key_id = os.getenv("RAZORPAY_KEY_ID")
+        razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        
+        if not razorpay_key_id or not razorpay_key_secret:
+            raise HTTPException(status_code=500, detail="Razorpay credentials not configured")
+        
+        client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+        
+        # Create order data
+        # Amount in paisa (multiply by 100)
+        amount = int(appointment.consultation_fees * 100)
+        
+        order_data = {
+            "amount": amount,
+            "currency": "INR",
+            "receipt": f"appointment_{appointment_id}",
+            "payment_capture": 1  # Auto-capture payment
+        }
+        
+        # Create order
+        order = client.order.create(order_data)
+        
+        # Update appointment with order ID
+        appointment.payment_order_id = order["id"]
+        appointment.payment_status = "pending"
+        await db.commit()
+        
+        return {
+            "order_id": order["id"],
+            "amount": amount,
+            "currency": "INR",
+            "appointment_id": appointment_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating payment order: {str(e)}")
+
+
+@router.post("/appointments/{appointment_id}/verify-payment")
+async def verify_payment(
+    appointment_id: int,
+    payment_data: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify Razorpay payment and update appointment status"""
+    # Get appointment details
+    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
+    appointment = result.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    try:
+        # Initialize Razorpay client
+        razorpay_key_id = os.getenv("RAZORPAY_KEY_ID")
+        razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        
+        if not razorpay_key_id or not razorpay_key_secret:
+            raise HTTPException(status_code=500, detail="Razorpay credentials not configured")
+        
+        client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+        
+        # Get payment details from request
+        razorpay_payment_id = payment_data.get("razorpay_payment_id")
+        razorpay_order_id = payment_data.get("razorpay_order_id")
+        razorpay_signature = payment_data.get("razorpay_signature")
+        
+        if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
+            raise HTTPException(status_code=400, detail="Missing payment verification data")
+        
+        # Verify payment signature
+        params_dict = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        }
+        
+        client.utility.verify_payment_signature(params_dict)
+        
+        # Update appointment with payment details
+        appointment.payment_id = razorpay_payment_id
+        appointment.payment_signature = razorpay_signature
+        appointment.payment_status = "completed"
+        appointment.status = "confirmed"  # Update appointment status
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": "Payment verified successfully",
+            "appointment_id": appointment_id
+        }
+        
+    except razorpay.errors.SignatureVerificationError:
+        # Update appointment status to failed
+        appointment.payment_status = "failed"
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error verifying payment: {str(e)}")
+
     
     await db.delete(doctor)
     await db.commit()

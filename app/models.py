@@ -139,9 +139,16 @@ class Appointment(Base):
     patient_name = Column(String(250), nullable=True)
     patient_contact = Column(String(80), nullable=True)
     doctor_id = Column(Integer, ForeignKey("doctors.id", ondelete="SET NULL"), nullable=True)
+    hospital_preference = Column(String(300), nullable=True) 
     scheduled_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
     status = Column(String(50), default="scheduled")
+    # Payment fields for Razorpay integration
+    consultation_fees = Column(Float, nullable=True)  # Consultation fees
+    payment_status = Column(String(50), default="pending")  # pending, completed, failed, refunded
+    payment_id = Column(String(255), nullable=True)  # Razorpay payment ID
+    payment_order_id = Column(String(255), nullable=True)  # Razorpay order ID
+    payment_signature = Column(String(255), nullable=True)  # Razorpay signature for verification
     created_at = Column(DateTime, default=datetime.utcnow)
     doctor = relationship("Doctor", back_populates="appointments", lazy="noload")
 
