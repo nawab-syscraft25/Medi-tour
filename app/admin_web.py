@@ -4894,9 +4894,9 @@ async def admin_stories_list(
         return RedirectResponse(url="/admin", status_code=302)
     
     # Get all patient stories
-    # result = await db.execute(
-    #     select(PatientStory).order_by(PatientStory.position.asc(), PatientStory.id.desc())
-    # )
+    result = await db.execute(
+        select(PatientStory).order_by(PatientStory.id.desc())
+    )
     stories = result.scalars().all()
     
     return render_template("admin/stories.html", {
@@ -5060,53 +5060,6 @@ async def admin_partners_list(
         "admin": admin,
         "partners": partners
     })
-
-    if not admin:
-        return RedirectResponse(url="/admin", status_code=302)
-    
-    try:
-        # Get existing story
-        result = await db.execute(select(PatientStory).where(PatientStory.id == story_id))
-        story = result.scalar_one_or_none()
-        
-        if not story:
-            raise HTTPException(status_code=404, detail="Patient story not found")
-        
-        # Validate rating
-        if rating < 1 or rating > 5:
-            raise ValueError("Rating must be between 1 and 5")
-        
-        # Handle profile photo upload
-        if profile_image and profile_image.filename:
-            filename = await save_uploaded_file(profile_image, "patient")
-            story.profile_photo = f"/media/patient/{filename}"
-        
-        # Update story fields
-        story.patient_name = patient_name
-        story.description = description
-        story.rating = rating
-        story.treatment_type = treatment_type or None
-        story.hospital_name = hospital_name or None
-        story.location = location or None
-        story.position = position
-        story.is_featured = is_featured
-        story.is_active = is_active
-        story.updated_at = datetime.utcnow()
-        
-        await db.commit()
-        
-        return RedirectResponse(url="/admin/stories", status_code=302)
-        
-    except Exception as e:
-        await db.rollback()
-        print(f"Error updating patient story: {str(e)}")
-        return render_template("admin/story_form.html", {
-            "request": request,
-            "admin": admin,
-            "action": "Edit",
-            "story": story,
-            "error": f"Error updating patient story: {str(e)}"
-        })
 
 
 @router.post("/admin/stories/{story_id}/delete")
