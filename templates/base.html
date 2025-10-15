@@ -500,6 +500,18 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if '/about-us' in request.url.path %}active{% endif %}" href="/admin/about-us">
+                    <i class="fas fa-info-circle"></i>
+                    <span>About Us</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if '/contact-page' in request.url.path %}active{% endif %}" href="/admin/contact-page">
+                    <i class="fas fa-address-book"></i>
+                    <span>Contact Page</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if '/banners' in request.url.path %}active{% endif %}" href="/admin/banners">
                     <i class="fas fa-image"></i>
                     <span>Banners</span>

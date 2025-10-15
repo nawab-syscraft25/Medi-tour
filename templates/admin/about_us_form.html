@@ -1,0 +1,132 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<h1>{% if action=='create' %}Create About Us{% else %}Edit About Us{% endif %}</h1>
+<form method="post" action="{% if action=='create' %}/admin/about-us{% else %}/admin/about-us/{{ item.id }}{% endif %}">
+  <div class="form-group">
+    <label>Heading</label>
+    <input type="text" name="heading" class="form-control" value="{{ item.heading if item else '' }}" required />
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <textarea name="description" class="form-control">{{ item.description if item else '' }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>Vision Heading</label>
+    <input type="text" name="vision_heading" class="form-control" value="{{ item.vision_heading if item else '' }}" />
+  </div>
+  <div class="form-group">
+    <label>Vision Description</label>
+    <textarea name="vision_desc" class="form-control">{{ item.vision_desc if item else '' }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>Mission</label>
+    <textarea name="mission" class="form-control">{{ item.mission if item else '' }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>Bottom Heading</label>
+    <input type="text" name="bottom_heading" class="form-control" value="{{ item.bottom_heading if item else '' }}" />
+  </div>
+  <div class="form-group">
+    <label>Bottom Description</label>
+    <textarea name="bottom_desc" class="form-control">{{ item.bottom_desc if item else '' }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>Bottom List (comma-separated)</label>
+    <input type="text" name="bottom_list" class="form-control" value="{{ item.bottom_list if item else '' }}" />
+  </div>
+  <div class="form-group">
+    <label>Feature Title</label>
+    <input type="text" name="feature_title" class="form-control" value="{{ item.feature_title if item else '' }}" />
+  </div>
+  <div class="form-group">
+    <label>Feature Description</label>
+    <textarea name="feature_desc" class="form-control">{{ item.feature_desc if item else '' }}</textarea>
+  </div>
+  <div class="form-group">
+    <label>Position</label>
+    <input type="number" name="position" class="form-control" value="{{ item.position if item else 0 }}" />
+  </div>
+  <div class="form-check">
+    <input type="checkbox" name="is_featured" value="true" {% if item and item.is_featured %}checked{% endif %} /> Featured
+  </div>
+  <div class="form-check">
+    <input type="checkbox" name="is_active" value="true" {% if item and item.is_active %}checked{% endif %} /> Active
+  </div>
+  <hr />
+  <h3>Featured Cards</h3>
+  <p class="text-muted">Manage small feature cards associated with this About Us section.</p>
+  <div id="featured-cards-wrapper">
+    {% if item and item.featured_cards %}
+      {% for card in item.featured_cards %}
+      <div class="card mb-2 p-2 featured-card-row">
+        <input type="hidden" name="featured_id[]" value="{{ card.id }}" />
+        <div class="mb-2">
+          <label>Heading</label>
+          <input type="text" name="featured_heading[]" class="form-control" value="{{ card.heading }}" />
+        </div>
+        <div class="mb-2">
+          <label>Description</label>
+          <textarea name="featured_description[]" class="form-control">{{ card.description }}</textarea>
+        </div>
+        <div class="mb-2 row">
+          <div class="col-6">
+            <label>Position</label>
+            <input type="number" name="featured_position[]" class="form-control" value="{{ card.position }}" />
+          </div>
+          <div class="col-6 d-flex align-items-end">
+            <div class="form-check mb-2">
+              <input type="checkbox" class="form-check-input" name="featured_delete[]" value="{{ card.id }}" id="del-{{ card.id }}" />
+              <label class="form-check-label" for="del-{{ card.id }}">Delete</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  <button type="button" id="add-featured-card" class="btn btn-outline-secondary mb-3">Add Featured Card</button>
+
+  <script>
+    (function(){
+      const wrapper = document.getElementById('featured-cards-wrapper');
+      const addBtn = document.getElementById('add-featured-card');
+      function makeRow() {
+        const div = document.createElement('div');
+        div.className = 'card mb-2 p-2 featured-card-row';
+        div.innerHTML = `
+          <input type="hidden" name="featured_id[]" value="" />
+          <div class="mb-2">
+            <label>Heading</label>
+            <input type="text" name="featured_heading[]" class="form-control" value="" />
+          </div>
+          <div class="mb-2">
+            <label>Description</label>
+            <textarea name="featured_description[]" class="form-control"></textarea>
+          </div>
+          <div class="mb-2 row">
+            <div class="col-6">
+              <label>Position</label>
+              <input type="number" name="featured_position[]" class="form-control" value="0" />
+            </div>
+            <div class="col-6 d-flex align-items-end">
+              <button type="button" class="btn btn-danger btn-sm ms-auto remove-featured">Remove</button>
+            </div>
+          </div>
+        `;
+        return div;
+      }
+      addBtn.addEventListener('click', function(){
+        const row = makeRow();
+        wrapper.appendChild(row);
+        row.querySelector('.remove-featured').addEventListener('click', function(){ row.remove(); });
+      });
+      // attach remove handlers for any initial rows that have Remove buttons
+      document.querySelectorAll('.remove-featured').forEach(function(btn){
+        btn.addEventListener('click', function(){ btn.closest('.featured-card-row').remove(); });
+      });
+    })();
+  </script>
+
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

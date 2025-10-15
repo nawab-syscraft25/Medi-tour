@@ -2604,10 +2604,24 @@ async def get_partners(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all partner hospitals for frontend display"""
-    query = select(models.PartnerHospital).order_by(models.PartnerHospital.position, models.PartnerHospital.created_at.desc())
-    
+    # PartnerHospital may not have a `position` or `is_active` column in some deployments
+    # Build ordering dynamically to avoid AttributeError
+    order_clauses = []
+    if hasattr(models.PartnerHospital, 'position'):
+        order_clauses.append(models.PartnerHospital.position)
+    # Always fall back to created_at desc for deterministic ordering
+    order_clauses.append(models.PartnerHospital.created_at.desc())
+
+    query = select(models.PartnerHospital).order_by(*order_clauses)
+
+    # Apply active_only filter only if the column exists
     if active_only:
-        query = query.where(models.PartnerHospital.is_active == True)
+        if hasattr(models.PartnerHospital, 'is_active'):
+            query = query.where(models.PartnerHospital.is_active == True)
+        else:
+            # Column missing - cannot filter; return all partners (caller asked for active_only)
+            # Log a small message for visibility in dev environments
+            print("Warning: PartnerHospital.is_active column not present; returning all partners")
     
     result = await db.execute(query)
     partners = result.scalars().all()
@@ -2623,6 +2637,117 @@ async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
     
     if not partner:
         raise HTTPException(status_code=404, detail="Partner hospital not found")
+
+
+# About Us endpoints
+@router.get("/about-us", response_model=List[schemas.AboutUsResponse])
+async def get_about_us_list(db: AsyncSession = Depends(get_db)):
+    """Return all AboutUs entries with featured cards"""
+    result = await db.execute(
+        select(models.AboutUs).order_by(models.AboutUs.position, models.AboutUs.created_at.desc())
+    )
+    items = result.scalars().all()
+    # Eager-load featured cards for each item within the session
+    about_list = []
+    for item in items:
+        # load featured cards
+        fc_result = await db.execute(
+            select(models.FeaturedCard).where(models.FeaturedCard.about_us_id == item.id).order_by(models.FeaturedCard.position)
+        )
+        fcs = fc_result.scalars().all()
+        featured_cards_data = [
+            {
+                "id": fc.id,
+                "about_us_id": fc.about_us_id,
+                "heading": fc.heading,
+                "description": fc.description,
+                "position": fc.position,
+                "created_at": fc.created_at,
+            }
+            for fc in fcs
+        ]
+
+        about_list.append({
+            "id": item.id,
+            "heading": item.heading,
+            "description": item.description,
+            "vision_heading": item.vision_heading,
+            "vision_desc": item.vision_desc,
+            "vision": item.vision,
+            "mission": item.mission,
+            "bottom_heading": item.bottom_heading,
+            "bottom_desc": item.bottom_desc,
+            "bottom_list": item.bottom_list,
+            "feature_title": item.feature_title,
+            "feature_desc": item.feature_desc,
+            "position": item.position,
+            "is_featured": item.is_featured,
+            "is_active": item.is_active,
+            "created_at": item.created_at,
+            "updated_at": item.updated_at,
+            "featured_cards": featured_cards_data,
+        })
+
+    return about_list
+
+
+@router.get("/about-us/{about_id}", response_model=schemas.AboutUsResponse)
+async def get_about_us(about_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.AboutUs).where(models.AboutUs.id == about_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="AboutUs not found")
+    fc_result = await db.execute(
+        select(models.FeaturedCard).where(models.FeaturedCard.about_us_id == item.id).order_by(models.FeaturedCard.position)
+    )
+    fcs = fc_result.scalars().all()
+    featured_cards_data = [
+        {
+            "id": fc.id,
+            "about_us_id": fc.about_us_id,
+            "heading": fc.heading,
+            "description": fc.description,
+            "position": fc.position,
+            "created_at": fc.created_at,
+        }
+        for fc in fcs
+    ]
+
+    return {
+        "id": item.id,
+        "heading": item.heading,
+        "description": item.description,
+        "vision_heading": item.vision_heading,
+        "vision_desc": item.vision_desc,
+        "vision": item.vision,
+        "mission": item.mission,
+        "bottom_heading": item.bottom_heading,
+        "bottom_desc": item.bottom_desc,
+        "bottom_list": item.bottom_list,
+        "feature_title": item.feature_title,
+        "feature_desc": item.feature_desc,
+        "position": item.position,
+        "is_featured": item.is_featured,
+        "is_active": item.is_active,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+        "featured_cards": featured_cards_data,
+    }
+
+
+# Contact Us Page endpoint
+@router.get("/contact-us", response_model=schemas.ContactUsPageResponse)
+async def get_contact_us_page(db: AsyncSession = Depends(get_db)):
+    # Prefer active page, otherwise return the first available
+    result = await db.execute(select(models.ContactUsPage).where(models.ContactUsPage.is_active == True).order_by(models.ContactUsPage.created_at.desc()).limit(1))
+    page = result.scalar_one_or_none()
+    if not page:
+        # Fallback: return the first page if exists
+        result = await db.execute(select(models.ContactUsPage).order_by(models.ContactUsPage.created_at.desc()).limit(1))
+        page = result.scalar_one_or_none()
+    if not page:
+        raise HTTPException(status_code=404, detail="ContactUsPage not found")
+    return page
     
     return partner
 

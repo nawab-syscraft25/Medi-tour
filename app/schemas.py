@@ -1024,3 +1024,54 @@ BlogResponse.model_rebuild()
 BannerResponse.model_rebuild()
 PartnerHospitalResponse.model_rebuild()
 PatientStoryResponse.model_rebuild()
+
+
+# AboutUs / FeaturedCard / ContactUsPage schemas
+class FeaturedCardResponse(BaseSchema):
+    id: int
+    about_us_id: int
+    heading: str
+    description: Optional[str] = None
+    position: int
+    created_at: datetime
+
+
+class AboutUsBase(BaseModel):
+    heading: str
+    description: Optional[str] = None
+    vision_heading: Optional[str] = None
+    vision_desc: Optional[str] = None
+    vision: Optional[str] = None
+    mission: Optional[str] = None
+    bottom_heading: Optional[str] = None
+    bottom_desc: Optional[str] = None
+    bottom_list: Optional[str] = None
+    feature_title: Optional[str] = None
+    feature_desc: Optional[str] = None
+
+
+class AboutUsResponse(AboutUsBase, BaseSchema):
+    id: int
+    position: int
+    is_featured: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    featured_cards: List[FeaturedCardResponse] = []
+
+
+class ContactUsPageResponse(BaseSchema):
+    id: int
+    heading: Optional[str] = None
+    description: Optional[str] = None
+    phone_no: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+
+AboutUsResponse.model_rebuild()
+FeaturedCardResponse.model_rebuild()
+ContactUsPageResponse.model_rebuild()

@@ -372,3 +372,62 @@ class PatientStory(Base):
     is_active = Column(Boolean, default=True)  # Active status
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AboutUs(Base):
+    __tablename__ = "about_us"
+    id = Column(Integer, primary_key=True, index=True)
+    # Main heading and description
+    heading = Column(String(300), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+
+    # Images are stored in Image table with owner_type 'about_us' and owner_id pointing to this id
+    # Vision block
+    vision_heading = Column(String(300), nullable=True)
+    vision_desc = Column(Text, nullable=True)
+    vision = Column(Text, nullable=True)
+
+    # Mission
+    mission = Column(Text, nullable=True)
+
+    # Bottom / CTA block
+    bottom_heading = Column(String(300), nullable=True)
+    bottom_desc = Column(Text, nullable=True)
+    bottom_list = Column(Text, nullable=True)  # comma-separated or JSON list
+
+    # Feature section
+    feature_title = Column(String(300), nullable=True)
+    feature_desc = Column(Text, nullable=True)
+
+    # Common metadata
+    position = Column(Integer, default=0)
+    is_featured = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FeaturedCard(Base):
+    __tablename__ = "featured_cards"
+    id = Column(Integer, primary_key=True, index=True)
+    about_us_id = Column(Integer, ForeignKey("about_us.id", ondelete="CASCADE"), nullable=False, index=True)
+    heading = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+    position = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship back to AboutUs
+    about_us = relationship("AboutUs", backref="featured_cards", lazy="noload")
+
+
+class ContactUsPage(Base):
+    __tablename__ = "contact_us_page"
+    id = Column(Integer, primary_key=True, index=True)
+    heading = Column(String(300), nullable=True)
+    description = Column(Text, nullable=True)
+    phone_no = Column(String(100), nullable=True)
+    email = Column(String(300), nullable=True)
+    address = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

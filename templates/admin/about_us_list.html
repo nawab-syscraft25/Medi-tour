@@ -1,0 +1,27 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<h1>About Us Entries</h1>
+<a href="/admin/about-us/new" class="btn btn-primary">Create New</a>
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>Heading</th><th>Position</th><th>Featured</th><th>Active</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td>{{ it.id }}</td>
+      <td>{{ it.heading }}</td>
+      <td>{{ it.position }}</td>
+      <td>{{ it.is_featured }}</td>
+      <td>{{ it.is_active }}</td>
+      <td>
+        <a href="/admin/about-us/{{ it.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+        <form method="post" action="/admin/about-us/{{ it.id }}/delete" style="display:inline">
+          <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -25,7 +25,7 @@ import re
 import html
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User, Appointment, doctor_hospital_association
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User, Appointment, doctor_hospital_association, AboutUs, FeaturedCard, ContactUsPage
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -4166,6 +4166,307 @@ async def admin_blog_new(
         "blog": None,
         "action": "create"
     })
+
+
+# -------------------- About Us Management --------------------
+
+
+@router.get("/admin/about-us", response_class=HTMLResponse)
+async def admin_about_us_list(request: Request, session_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    result = await db.execute(select(AboutUs).order_by(desc(AboutUs.position)))
+    items = result.scalars().all()
+    return templates.TemplateResponse("admin/about_us_list.html", {"request": request, "admin": admin, "items": items})
+
+
+@router.get("/admin/about-us/new", response_class=HTMLResponse)
+async def admin_about_us_new(request: Request, session_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    return templates.TemplateResponse("admin/about_us_form.html", {"request": request, "admin": admin, "item": None, "action": "create"})
+
+
+@router.get("/admin/about-us/{item_id}/edit", response_class=HTMLResponse)
+async def admin_about_us_edit(item_id: int, request: Request, session_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    # Eager-load featured_cards relationship to avoid async lazy-load during template rendering
+    result = await db.execute(
+        select(AboutUs).options(selectinload(AboutUs.featured_cards)).where(AboutUs.id == item_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="AboutUs not found")
+    return templates.TemplateResponse("admin/about_us_form.html", {"request": request, "admin": admin, "item": item, "action": "edit"})
+
+
+@router.post("/admin/about-us")
+async def admin_about_us_create(request: Request,
+                                heading: str = Form(...),
+                                description: Optional[str] = Form(None),
+                                vision_heading: Optional[str] = Form(None),
+                                vision_desc: Optional[str] = Form(None),
+                                vision: Optional[str] = Form(None),
+                                mission: Optional[str] = Form(None),
+                                bottom_heading: Optional[str] = Form(None),
+                                bottom_desc: Optional[str] = Form(None),
+                                bottom_list: Optional[str] = Form(None),
+                                feature_title: Optional[str] = Form(None),
+                                feature_desc: Optional[str] = Form(None),
+                                position: int = Form(0),
+                                is_featured: bool = Form(False),
+                                is_active: bool = Form(True),
+                                session_token: Optional[str] = Cookie(None),
+                                db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    about = AboutUs(
+        heading=heading,
+        description=description,
+        vision_heading=vision_heading,
+        vision_desc=vision_desc,
+        vision=vision,
+        mission=mission,
+        bottom_heading=bottom_heading,
+        bottom_desc=bottom_desc,
+        bottom_list=bottom_list,
+        feature_title=feature_title,
+        feature_desc=feature_desc,
+        position=position,
+        is_featured=is_featured,
+        is_active=is_active
+    )
+    try:
+        db.add(about)
+        # Flush to ensure about.id is available for featured cards
+        await db.flush()
+
+        # Process featured cards submitted as arrays in the form
+        form = await request.form()
+        # FormData supports getlist for repeated fields
+        featured_ids = form.getlist('featured_id[]') if hasattr(form, 'getlist') else []
+        featured_headings = form.getlist('featured_heading[]') if hasattr(form, 'getlist') else []
+        featured_descriptions = form.getlist('featured_description[]') if hasattr(form, 'getlist') else []
+        featured_positions = form.getlist('featured_position[]') if hasattr(form, 'getlist') else []
+        featured_deletes = form.getlist('featured_delete[]') if hasattr(form, 'getlist') else []
+
+        max_len = max(len(featured_headings), len(featured_ids), len(featured_positions), len(featured_descriptions)) if featured_headings else 0
+        for i in range(max_len):
+            fid = featured_ids[i].strip() if i < len(featured_ids) and featured_ids[i] is not None else ''
+            fheading = featured_headings[i].strip() if i < len(featured_headings) and featured_headings[i] is not None else ''
+            fdesc = featured_descriptions[i].strip() if i < len(featured_descriptions) and featured_descriptions[i] is not None else ''
+            fpos_raw = featured_positions[i] if i < len(featured_positions) and featured_positions[i] is not None else '0'
+            try:
+                fpos = int(fpos_raw)
+            except Exception:
+                fpos = 0
+
+            # If there's an existing id
+            if fid:
+                try:
+                    card = await db.get(FeaturedCard, int(fid))
+                except Exception:
+                    card = None
+
+                if card:
+                    # If marked for deletion, delete it
+                    if str(card.id) in featured_deletes:
+                        await db.delete(card)
+                    else:
+                        card.heading = fheading or None
+                        card.description = fdesc or None
+                        card.position = fpos
+                        db.add(card)
+                # else: ignore invalid id
+            else:
+                # New card (only create if there's content)
+                if fheading or fdesc:
+                    new_card = FeaturedCard(
+                        about_us_id=about.id,
+                        heading=fheading or None,
+                        description=fdesc or None,
+                        position=fpos
+                    )
+                    db.add(new_card)
+
+        await db.commit()
+        return RedirectResponse(url="/admin/about-us", status_code=302)
+    except Exception as e:
+        await db.rollback()
+        return templates.TemplateResponse("admin/about_us_form.html", {
+            "request": request,
+            "admin": await get_current_admin_dict(None, db),
+            "item": about,
+            "action": "create",
+            "error": f"Error creating About Us: {str(e)}"
+        })
+
+
+@router.post("/admin/about-us/{item_id}")
+async def admin_about_us_update(item_id: int,
+                                request: Request,
+                                heading: str = Form(...),
+                                description: Optional[str] = Form(None),
+                                vision_heading: Optional[str] = Form(None),
+                                vision_desc: Optional[str] = Form(None),
+                                vision: Optional[str] = Form(None),
+                                mission: Optional[str] = Form(None),
+                                bottom_heading: Optional[str] = Form(None),
+                                bottom_desc: Optional[str] = Form(None),
+                                bottom_list: Optional[str] = Form(None),
+                                feature_title: Optional[str] = Form(None),
+                                feature_desc: Optional[str] = Form(None),
+                                position: int = Form(0),
+                                is_featured: bool = Form(False),
+                                is_active: bool = Form(True),
+                                session_token: Optional[str] = Cookie(None),
+                                db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    result = await db.execute(select(AboutUs).where(AboutUs.id == item_id))
+    about = result.scalar_one_or_none()
+    if not about:
+        raise HTTPException(status_code=404, detail="AboutUs not found")
+
+    about.heading = heading
+    about.description = description
+    about.vision_heading = vision_heading
+    about.vision_desc = vision_desc
+    about.vision = vision
+    about.mission = mission
+    about.bottom_heading = bottom_heading
+    about.bottom_desc = bottom_desc
+    about.bottom_list = bottom_list
+    about.feature_title = feature_title
+    about.feature_desc = feature_desc
+    about.position = position
+    about.is_featured = is_featured
+    about.is_active = is_active
+    try:
+        db.add(about)
+
+        # Process featured cards from form
+        form = await request.form()
+        featured_ids = form.getlist('featured_id[]') if hasattr(form, 'getlist') else []
+        featured_headings = form.getlist('featured_heading[]') if hasattr(form, 'getlist') else []
+        featured_descriptions = form.getlist('featured_description[]') if hasattr(form, 'getlist') else []
+        featured_positions = form.getlist('featured_position[]') if hasattr(form, 'getlist') else []
+        featured_deletes = form.getlist('featured_delete[]') if hasattr(form, 'getlist') else []
+
+        max_len = max(len(featured_headings), len(featured_ids), len(featured_positions), len(featured_descriptions)) if featured_headings else 0
+        for i in range(max_len):
+            fid = featured_ids[i].strip() if i < len(featured_ids) and featured_ids[i] is not None else ''
+            fheading = featured_headings[i].strip() if i < len(featured_headings) and featured_headings[i] is not None else ''
+            fdesc = featured_descriptions[i].strip() if i < len(featured_descriptions) and featured_descriptions[i] is not None else ''
+            fpos_raw = featured_positions[i] if i < len(featured_positions) and featured_positions[i] is not None else '0'
+            try:
+                fpos = int(fpos_raw)
+            except Exception:
+                fpos = 0
+
+            if fid:
+                try:
+                    card = await db.get(FeaturedCard, int(fid))
+                except Exception:
+                    card = None
+
+                if card:
+                    if str(card.id) in featured_deletes:
+                        await db.delete(card)
+                    else:
+                        card.heading = fheading or None
+                        card.description = fdesc or None
+                        card.position = fpos
+                        db.add(card)
+            else:
+                # New card
+                if fheading or fdesc:
+                    new_card = FeaturedCard(
+                        about_us_id=about.id,
+                        heading=fheading or None,
+                        description=fdesc or None,
+                        position=fpos
+                    )
+                    db.add(new_card)
+
+        await db.commit()
+        return RedirectResponse(url="/admin/about-us", status_code=302)
+    except Exception as e:
+        await db.rollback()
+        return templates.TemplateResponse("admin/about_us_form.html", {
+            "request": request,
+            "admin": await get_current_admin_dict(None, db),
+            "item": about,
+            "action": "edit",
+            "error": f"Error updating About Us: {str(e)}"
+        })
+
+
+@router.post("/admin/about-us/{item_id}/delete")
+async def admin_about_us_delete(item_id: int, session_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    await db.execute(delete(AboutUs).where(AboutUs.id == item_id))
+    await db.commit()
+    return RedirectResponse(url="/admin/about-us", status_code=302)
+
+
+# -------------------- Contact Us Page (single editable) --------------------
+
+
+@router.get("/admin/contact-page", response_class=HTMLResponse)
+async def admin_contact_page_edit(request: Request, session_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    result = await db.execute(select(ContactUsPage).limit(1))
+    page = result.scalar_one_or_none()
+    return templates.TemplateResponse("admin/contact_us_form.html", {"request": request, "admin": admin, "page": page})
+
+
+@router.post("/admin/contact-page")
+async def admin_contact_page_update(request: Request,
+                                    heading: Optional[str] = Form(None),
+                                    description: Optional[str] = Form(None),
+                                    phone_no: Optional[str] = Form(None),
+                                    email: Optional[str] = Form(None),
+                                    address: Optional[str] = Form(None),
+                                    is_active: bool = Form(True),
+                                    session_token: Optional[str] = Cookie(None),
+                                    db: AsyncSession = Depends(get_db)):
+    admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+
+    result = await db.execute(select(ContactUsPage).limit(1))
+    page = result.scalar_one_or_none()
+    if not page:
+        page = ContactUsPage(heading=heading, description=description, phone_no=phone_no, email=email, address=address, is_active=is_active)
+        db.add(page)
+    else:
+        page.heading = heading
+        page.description = description
+        page.phone_no = phone_no
+        page.email = email
+        page.address = address
+        page.is_active = is_active
+        db.add(page)
+
+    await db.commit()
+    return RedirectResponse(url="/admin/contact-page", status_code=302)
+
 
 
 @router.post("/admin/blogs")
