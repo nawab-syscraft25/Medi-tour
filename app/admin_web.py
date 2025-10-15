@@ -8,7 +8,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Stre
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, update, delete, and_, or_
+from sqlalchemy import select, func, desc, update, delete, and_, or_, insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 import hashlib
@@ -24,7 +25,7 @@ import re
 import html
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User, Appointment, doctor_hospital_association
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -2838,10 +2839,43 @@ async def admin_doctor_create(
                 select(Hospital).where(Hospital.id.in_(associated_hospitals))
             )
             hospitals = hospitals_result.scalars().all()
-            
-            # Associate hospitals with doctor
-            doctor.hospitals = hospitals
-            print(f"DEBUG DOCTOR: Associated {len(hospitals)} hospitals with doctor")
+            # Safely sync hospital associations using DB-backed queries to avoid duplicate inserts
+            hospitals_by_id = {h.id: h for h in hospitals}
+            selected_ids = set([h.id for h in hospitals])
+
+            # Load existing association ids directly from association table
+            existing_ids_result = await db.execute(
+                select(doctor_hospital_association.c.hospital_id).where(doctor_hospital_association.c.doctor_id == doctor.id)
+            )
+            existing_ids = set(r[0] for r in existing_ids_result.fetchall())
+
+            # Add new associations (only those not already present)
+            for hid in selected_ids - existing_ids:
+                # Use core insert to avoid ORM duplicate-insert behavior
+                try:
+                    stmt = insert(doctor_hospital_association).values(doctor_id=doctor.id, hospital_id=hid)
+                    # SQLite supports OR IGNORE - use prefix if available
+                    try:
+                        stmt = stmt.prefix_with('OR IGNORE')
+                    except Exception:
+                        pass
+                    await db.execute(stmt)
+                except IntegrityError:
+                    # Another concurrent insert may have happened; ignore
+                    await db.rollback()
+                    continue
+
+            # Remove associations that were deselected (delete directly from association table)
+            remove_ids = list(existing_ids - selected_ids)
+            if remove_ids:
+                await db.execute(
+                    delete(doctor_hospital_association).where(
+                        doctor_hospital_association.c.doctor_id == doctor.id,
+                        doctor_hospital_association.c.hospital_id.in_(remove_ids)
+                    )
+                )
+
+            print(f"DEBUG DOCTOR: Synced associations for doctor {doctor.id} (added: {len(selected_ids - existing_ids)}, removed: {len(remove_ids)})")
         
         # Handle image uploads
         image_count = 0
@@ -3101,9 +3135,42 @@ async def admin_doctor_update(
             )
             hospitals = hospitals_result.scalars().all()
             
-            # Associate hospitals with doctor
-            doctor.hospitals = hospitals
-            print(f"DEBUG DOCTOR: Associated {len(hospitals)} hospitals with doctor")
+            # Safely sync hospital associations using DB-backed queries to avoid duplicate inserts
+            hospitals_by_id = {h.id: h for h in hospitals}
+            selected_ids = set([h.id for h in hospitals])
+
+            # Load existing association ids directly from association table
+            existing_ids_result = await db.execute(
+                select(doctor_hospital_association.c.hospital_id).where(doctor_hospital_association.c.doctor_id == doctor.id)
+            )
+            existing_ids = set(r[0] for r in existing_ids_result.fetchall())
+
+            # Add new associations (only those not already present)
+            for hid in selected_ids - existing_ids:
+                # Use core insert to avoid ORM duplicate-insert behavior
+                try:
+                    stmt = insert(doctor_hospital_association).values(doctor_id=doctor.id, hospital_id=hid)
+                    try:
+                        stmt = stmt.prefix_with('OR IGNORE')
+                    except Exception:
+                        pass
+                    await db.execute(stmt)
+                except IntegrityError:
+                    # Another concurrent insert may have happened; ignore
+                    await db.rollback()
+                    continue
+
+            # Remove associations that were deselected (delete directly from association table)
+            remove_ids = list(existing_ids - selected_ids)
+            if remove_ids:
+                await db.execute(
+                    delete(doctor_hospital_association).where(
+                        doctor_hospital_association.c.doctor_id == doctor.id,
+                        doctor_hospital_association.c.hospital_id.in_(remove_ids)
+                    )
+                )
+
+            print(f"DEBUG DOCTOR: Synced associations for doctor {doctor.id} (added: {len(selected_ids - existing_ids)}, removed: {len(remove_ids)})")
         else:
             # Clear all hospital associations if none selected
             doctor.hospitals = []
@@ -3139,10 +3206,21 @@ async def admin_doctor_update(
         hospitals = await db.execute(select(Hospital).order_by(Hospital.name))
         hospitals = hospitals.scalars().all()
         
+        # Reload doctor with relationships to avoid lazy loading issues in template
+        doctor_result = await db.execute(
+            select(Doctor)
+            .options(
+                selectinload(Doctor.hospital),
+                selectinload(Doctor.hospitals)
+            )
+            .where(Doctor.id == doctor_id)
+        )
+        fresh_doctor = doctor_result.scalar_one_or_none()
+        
         return render_template("admin/doctor_form.html", {
             "request": request,
             "admin": admin,
-            "doctor": doctor,
+            "doctor": fresh_doctor if fresh_doctor else doctor,
             "hospitals": hospitals,
             "action": "Update",
             "error": f"Error updating doctor: {str(e)}"
@@ -4483,9 +4561,10 @@ async def admin_banner_new(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    return render_template("admin/banner_new.html", {
+    return render_template("admin/banner_form.html", {
         "request": request,
         "admin": admin,
+        "action": "Create"
     })
 
 
@@ -4501,11 +4580,40 @@ async def admin_banner_create(
         return RedirectResponse(url="/admin", status_code=302)
     
     form = await request.form()
+    # Read basic fields safely
+    name = form.get("name") or form.get("title") or ""
+    title = form.get("title") or None
+    description = form.get("description") or None
+    try:
+        position = int(form.get("position") or 0)
+    except Exception:
+        position = 0
+
+    # Handle uploaded file field 'banner_image'
+    image_url = None
+    if "banner_image" in form:
+        banner_file = form["banner_image"]
+        # banner_file is an UploadFile; check filename to ensure a file was provided
+        if hasattr(banner_file, "filename") and banner_file.filename:
+            try:
+                saved_name = await save_uploaded_file(banner_file, "banner")
+                # Save path served by static files; adjust as needed
+                image_url = f"/media/banner/{saved_name}"
+            except Exception:
+                image_url = None
+
+    # Active checkbox handling
+    is_active = False
+    if form.get("is_active") in ("true", "True", "on", "1"):
+        is_active = True
+
     banner = Banner(
-        title=form["title"],
-        description=form["description"],
-        image_url=form["image_url"],
-        position=int(form["position"]),
+        name=name,
+        title=title,
+        description=description,
+        image_url=image_url,
+        position=position,
+        is_active=is_active,
     )
     db.add(banner)
     await db.commit()
@@ -4598,6 +4706,8 @@ async def admin_banner_update(
         })
 
 
+# DEPRECATED: This implementation is outdated
+# Use the form-based implementation at line 5209 instead
 @router.post("/admin/banners/{banner_id}/delete", response_class=HTMLResponse)
 async def admin_banner_delete(
     request: Request,
@@ -4605,19 +4715,25 @@ async def admin_banner_delete(
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a banner"""
+    """Delete banner (deprecated - use form-based version)"""
     admin = await get_current_admin_dict(session_token, db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    banner = await db.get(Banner, banner_id)
-    if not banner:
+    try:
+        # Get banner
+        result = await db.execute(select(Banner).where(Banner.id == banner_id))
+        banner = result.scalar_one_or_none()
+        
+        if banner:
+            await db.delete(banner)
+            await db.commit()
+        
         return RedirectResponse(url="/admin/banners", status_code=302)
-    
-    await db.delete(banner)
-    await db.commit()
-    
-    return RedirectResponse(url="/admin/banners", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting banner: {str(e)}")
 
 
 # ================================
@@ -4635,9 +4751,16 @@ async def admin_partner_new(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    return render_template("admin/partner_new.html", {
+    # Render the partner form template (use same template for create and edit)
+    # Provide hospitals list for select box
+    hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name.asc()))
+    hospitals = hospitals_result.scalars().all()
+    return render_template("admin/partner_form.html", {
         "request": request,
         "admin": admin,
+        "hospitals": hospitals,
+        "action": "Create",
+        "partner": None
     })
 
 
@@ -4732,9 +4855,10 @@ async def admin_partner_delete(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    return render_template("admin/banner_new.html", {
+    return render_template("admin/banner_form.html", {
         "request": request,
         "admin": admin,
+        "action": "Create"
     })
 
 
@@ -4926,9 +5050,14 @@ async def admin_partner_new(
     if not admin:
         return RedirectResponse(url="/admin", status_code=302)
     
-    return render_template("admin/partner_new.html", {
+    hospitals_result = await db.execute(select(Hospital).order_by(Hospital.name.asc()))
+    hospitals = hospitals_result.scalars().all()
+    return render_template("admin/partner_form.html", {
         "request": request,
         "admin": admin,
+        "hospitals": hospitals,
+        "action": "Create",
+        "partner": None
     })
 
 
@@ -5583,6 +5712,52 @@ async def admin_story_update(
 ):
     """Update patient story"""
     admin = await get_current_admin_dict(session_token, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=302)
+    
+    try:
+        # Get existing story
+        result = await db.execute(select(PatientStory).where(PatientStory.id == story_id))
+        story = result.scalar_one_or_none()
+        
+        if not story:
+            raise HTTPException(status_code=404, detail="Patient story not found")
+        
+        # Handle profile photo upload
+        if profile_image and profile_image.filename:
+            filename = await save_uploaded_file(profile_image, "patient")
+            story.profile_photo = f"/media/patient/{filename}"
+        
+        # Validate rating
+        if rating < 1 or rating > 5:
+            raise ValueError("Rating must be between 1 and 5")
+        
+        # Update story fields
+        story.patient_name = patient_name
+        story.description = description
+        story.rating = rating
+        story.treatment_type = treatment_type or None
+        story.hospital_name = hospital_name or None
+        story.location = location or None
+        story.position = position
+        story.is_featured = is_featured
+        story.is_active = is_active
+        story.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        return RedirectResponse(url="/admin/stories", status_code=302)
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"Error updating patient story: {str(e)}")
+        return render_template("admin/story_form.html", {
+            "request": request,
+            "admin": admin,
+            "action": "Edit",
+            "story": story,
+            "error": f"Error updating patient story: {str(e)}"
+        })
 
 
 @router.get("/admin/partners", response_class=HTMLResponse)

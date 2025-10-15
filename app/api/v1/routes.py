@@ -2,18 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, U
 from fastapi.responses import HTMLResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
-from sqlalchemy.orm import selectinload
 from typing import List, Optional
 import os
 import uuid
 from pathlib import Path
-import razorpay  # Restore razorpay import
 from app.db import get_db
 from app import models, schemas
-from app.dependencies import get_current_admin, get_current_user
-
-from app.dependencies import get_current_admin, get_current_user
-
 from app.dependencies import get_current_admin, get_current_user
 
 
@@ -55,17 +49,6 @@ def hospital_to_dict(hospital: models.Hospital) -> dict:
 
 def doctor_to_dict(doctor: models.Doctor) -> dict:
     """Convert Doctor model to dict for safe serialization"""
-    # Get associated hospitals if they exist
-    associated_hospitals = []
-    if hasattr(doctor, 'hospitals') and doctor.hospitals:
-        associated_hospitals = [
-            {
-                "id": hospital.id,
-                "name": hospital.name,
-                "location": hospital.location
-            } for hospital in doctor.hospitals
-        ]
-    
     return {
         "id": doctor.id,
         "name": doctor.name,
@@ -84,14 +67,13 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "qualifications": doctor.qualifications,
         "highlights": doctor.highlights,
         "awards": doctor.awards,
-        "time_slots": doctor.time_slots,
         "location": doctor.location,
+        "time_slots": doctor.time_slots,
         "is_featured": doctor.is_featured if doctor.is_featured is not None else False,
         "is_active": doctor.is_active if doctor.is_active is not None else True,
         "created_at": doctor.created_at,
         "images": [],  # Will be populated separately
         "faqs": [],    # Will be populated separately
-        "associated_hospitals": associated_hospitals,  # Include associated hospitals
         # Direct FAQ fields from model (all 5 FAQ pairs)
         "faq1_question": doctor.faq1_question,
         "faq1_answer": doctor.faq1_answer,
@@ -103,6 +85,9 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "faq4_answer": doctor.faq4_answer,
         "faq5_question": doctor.faq5_question,
         "faq5_answer": doctor.faq5_answer
+        ,
+        # Associated hospitals (will be populated separately when needed)
+        "associated_hospitals": []
     }
 
 
@@ -124,14 +109,13 @@ def treatment_to_dict(treatment: models.Treatment) -> dict:
         "location": treatment.location,
         "features": treatment.features,
         "rating": treatment.rating,
-        "is_ayushman": treatment.is_ayushman if treatment.is_ayushman is not None else False,
-        "Includes": treatment.Includes,
-        "excludes": treatment.excludes,
+        "is_ayushman": bool(getattr(treatment, 'is_ayushman', False)),
+        "Includes": treatment.Includes if hasattr(treatment, 'Includes') else None,
+        "excludes": treatment.excludes if hasattr(treatment, 'excludes') else None,
         "is_featured": treatment.is_featured if treatment.is_featured is not None else False,
         "created_at": treatment.created_at,
-        "images": [],  # Will be populated separately
-        "faqs": [],    # Will be populated separately
-        # Direct FAQ fields from model (all 5 FAQ pairs)
+        "images": [], 
+        "faqs": [],   
         "faq1_question": treatment.faq1_question,
         "faq1_answer": treatment.faq1_answer,
         "faq2_question": treatment.faq2_question,
@@ -440,39 +424,11 @@ async def create_doctor(
     current_admin: models.Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    # Extract associated hospitals from the schema if provided
-    associated_hospitals = getattr(doctor, 'associated_hospitals', None)
-    
-    # Create doctor object without associated hospitals
-    doctor_dict = doctor.model_dump()
-    if 'associated_hospitals' in doctor_dict:
-        del doctor_dict['associated_hospitals']
-    
-    db_doctor = models.Doctor(**doctor_dict)
+    db_doctor = models.Doctor(**doctor.model_dump())
     db.add(db_doctor)
     await db.commit()
-    
-    # Handle associated hospitals if provided
-    if associated_hospitals:
-        # Get hospital objects
-        hospitals_result = await db.execute(
-            select(models.Hospital).where(models.Hospital.id.in_(associated_hospitals))
-        )
-        hospitals = hospitals_result.scalars().all()
-        
-        # Associate hospitals with doctor
-        db_doctor.hospitals = hospitals
-        await db.commit()
-    
     # Fetch fresh copy to get the generated ID without triggering relationships  
-    result = await db.execute(
-        select(models.Doctor)
-        .options(
-            selectinload(models.Doctor.hospital),
-            selectinload(models.Doctor.hospitals)
-        )
-        .where(models.Doctor.id == db_doctor.id)
-    )
+    result = await db.execute(select(models.Doctor).where(models.Doctor.id == db_doctor.id))
     fresh_doctor = result.scalar_one()
     return doctor_to_dict(fresh_doctor)
 
@@ -487,10 +443,7 @@ async def get_doctors(
     location: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(models.Doctor).options(
-        selectinload(models.Doctor.hospital),
-        selectinload(models.Doctor.hospitals)
-    )
+    query = select(models.Doctor)
     
     filters = []
     if search:
@@ -568,6 +521,15 @@ async def get_doctors(
                 "updated_at": faq.updated_at
             } for faq in faqs
         ]
+        # Load associated hospitals for this doctor
+        hospitals_result = await db.execute(
+            select(models.Hospital)
+            .join(models.doctor_hospital_association, models.doctor_hospital_association.c.hospital_id == models.Hospital.id)
+            .where(models.doctor_hospital_association.c.doctor_id == doctor.id)
+        )
+        associated_hospitals = hospitals_result.scalars().all()
+        # Only expose minimal hospital info for associated_hospitals: id and name
+        doctor_dict['associated_hospitals'] = [{"id": h.id, "name": h.name} for h in associated_hospitals]
         doctor_dicts.append(doctor_dict)
     
     return doctor_dicts
@@ -576,14 +538,7 @@ async def get_doctors(
 @router.get("/doctors/{doctor_id}/debug")
 async def debug_doctor_faqs(doctor_id: int, db: AsyncSession = Depends(get_db)):
     """Debug endpoint to check doctor FAQ data"""
-    result = await db.execute(
-        select(models.Doctor)
-        .options(
-            selectinload(models.Doctor.hospital),
-            selectinload(models.Doctor.hospitals)
-        )
-        .where(models.Doctor.id == doctor_id)
-    )
+    result = await db.execute(select(models.Doctor).where(models.Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
@@ -628,14 +583,7 @@ async def debug_doctor_faqs(doctor_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/doctors/{doctor_id}", response_model=schemas.DoctorResponse)
 async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(models.Doctor)
-        .options(
-            selectinload(models.Doctor.hospital),
-            selectinload(models.Doctor.hospitals)
-        )
-        .where(models.Doctor.id == doctor_id)
-    )
+    result = await db.execute(select(models.Doctor).where(models.Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
@@ -686,6 +634,15 @@ async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
             "updated_at": faq.updated_at
         } for faq in faqs
     ]
+    # Load associated hospitals for this doctor
+    hospitals_result = await db.execute(
+        select(models.Hospital)
+        .join(models.doctor_hospital_association, models.doctor_hospital_association.c.hospital_id == models.Hospital.id)
+        .where(models.doctor_hospital_association.c.doctor_id == doctor.id)
+    )
+    associated_hospitals = hospitals_result.scalars().all()
+    # Only expose minimal hospital info for associated_hospitals: id and name
+    doctor_dict['associated_hospitals'] = [{"id": h.id, "name": h.name} for h in associated_hospitals]
     
     return doctor_dict
 
@@ -697,43 +654,14 @@ async def update_doctor(
     current_admin: models.Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(models.Doctor)
-        .options(
-            selectinload(models.Doctor.hospital),
-            selectinload(models.Doctor.hospitals)
-        )
-        .where(models.Doctor.id == doctor_id)
-    )
+    result = await db.execute(select(models.Doctor).where(models.Doctor.id == doctor_id))
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
     
-    # Extract associated hospitals from the schema if provided
-    associated_hospitals = getattr(doctor_update, 'associated_hospitals', None)
-    
-    # Update doctor fields
     update_data = doctor_update.model_dump(exclude_unset=True)
-    if 'associated_hospitals' in update_data:
-        del update_data['associated_hospitals']
-    
     for field, value in update_data.items():
         setattr(doctor, field, value)
-    
-    # Handle associated hospitals if provided
-    if associated_hospitals is not None:
-        if associated_hospitals:
-            # Get hospital objects
-            hospitals_result = await db.execute(
-                select(models.Hospital).where(models.Hospital.id.in_(associated_hospitals))
-            )
-            hospitals = hospitals_result.scalars().all()
-            
-            # Associate hospitals with doctor
-            doctor.hospitals = hospitals
-        else:
-            # Clear all hospital associations if empty list provided
-            doctor.hospitals = []
     
     await db.commit()
     await db.refresh(doctor)
@@ -750,283 +678,6 @@ async def delete_doctor(
     doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
-    
-    await db.delete(doctor)
-    await db.commit()
-    return {"message": "Doctor deleted successfully"}
-
-
-# ================================
-# APPOINTMENT ENDPOINTS WITH PAYMENT INTEGRATION
-# ================================
-
-@router.post("/appointments", response_model=schemas.AppointmentResponse)
-async def create_appointment(
-    appointment: schemas.AppointmentCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a new appointment with optional payment integration"""
-    db_appointment = models.Appointment(**appointment.model_dump())
-    db.add(db_appointment)
-    await db.commit()
-    await db.refresh(db_appointment)
-    return db_appointment
-
-
-@router.get("/appointments", response_model=List[schemas.AppointmentResponse])
-async def get_appointments(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    doctor_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
-    current_admin: models.Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get all appointments (admin only)"""
-    query = select(models.Appointment)
-    
-    filters = []
-    if doctor_id:
-        filters.append(models.Appointment.doctor_id == doctor_id)
-    if status:
-        filters.append(models.Appointment.status == status)
-    
-    if filters:
-        query = query.where(and_(*filters))
-    
-    query = query.offset(skip).limit(limit).order_by(models.Appointment.created_at.desc())
-    
-    result = await db.execute(query)
-    return result.scalars().all()
-
-
-@router.get("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
-async def get_appointment(
-    appointment_id: int,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get a specific appointment by ID"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    return appointment
-
-
-@router.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
-async def update_appointment(
-    appointment_id: int,
-    appointment_update: schemas.AppointmentUpdate,
-    current_admin: models.Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update an appointment (admin only)"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    update_data = appointment_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(appointment, field, value)
-    
-    await db.commit()
-    await db.refresh(appointment)
-    return appointment
-
-
-@router.delete("/appointments/{appointment_id}")
-async def delete_appointment(
-    appointment_id: int,
-    current_admin: models.Admin = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete an appointment (admin only)"""
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    await db.delete(appointment)
-    await db.commit()
-    return {"message": "Appointment deleted successfully"}
-
-
-# ================================
-# PAYMENT PAGE ROUTE
-# ================================
-
-@router.get("/appointments/{appointment_id}/payment", response_class=HTMLResponse)
-async def payment_page(
-    appointment_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
-    """Display payment page for an appointment"""
-    # Get appointment details
-    result = await db.execute(
-        select(models.Appointment)
-        .options(selectinload(models.Appointment.doctor))
-        .where(models.Appointment.id == appointment_id)
-    )
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    # Get Razorpay key from environment
-    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "your_razorpay_key_id_here")
-    
-    return templates.TemplateResponse("payment.html", {
-        "request": request,
-        "appointment": appointment,
-        "doctor": appointment.doctor,
-        "razorpay_key_id": razorpay_key_id
-    })
-
-
-# ================================
-# BOOKING PAGE ROUTE
-# ================================
-
-@router.get("/book-appointment", response_class=HTMLResponse)
-async def book_appointment_page(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
-    """Display appointment booking page"""
-    # Get all doctors
-    result = await db.execute(select(models.Doctor).order_by(models.Doctor.name))
-    doctors = result.scalars().all()
-    
-    return templates.TemplateResponse("book_appointment.html", {
-        "request": request,
-        "doctors": doctors
-    })
-
-
-# ================================
-# RAZORPAY PAYMENT INTEGRATION
-# ================================
-
-@router.post("/appointments/{appointment_id}/create-payment-order")
-async def create_payment_order(
-    appointment_id: int,
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a Razorpay order for appointment payment"""
-    # Get appointment details
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    # Check if consultation fees are set
-    if not appointment.consultation_fees or appointment.consultation_fees <= 0:
-        raise HTTPException(status_code=400, detail="Consultation fees not set for this appointment")
-    
-    try:
-        # Initialize Razorpay client
-        # Note: You need to set these environment variables
-        razorpay_key_id = os.getenv("RAZORPAY_KEY_ID")
-        razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET")
-        
-        if not razorpay_key_id or not razorpay_key_secret:
-            raise HTTPException(status_code=500, detail="Razorpay credentials not configured")
-        
-        client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
-        
-        # Create order data
-        # Amount in paisa (multiply by 100)
-        amount = int(appointment.consultation_fees * 100)
-        
-        order_data = {
-            "amount": amount,
-            "currency": "INR",
-            "receipt": f"appointment_{appointment_id}",
-            "payment_capture": 1  # Auto-capture payment
-        }
-        
-        # Create order
-        order = client.order.create(order_data)
-        
-        # Update appointment with order ID
-        appointment.payment_order_id = order["id"]
-        appointment.payment_status = "pending"
-        await db.commit()
-        
-        return {
-            "order_id": order["id"],
-            "amount": amount,
-            "currency": "INR",
-            "appointment_id": appointment_id
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating payment order: {str(e)}")
-
-
-@router.post("/appointments/{appointment_id}/verify-payment")
-async def verify_payment(
-    appointment_id: int,
-    payment_data: dict,
-    db: AsyncSession = Depends(get_db)
-):
-    """Verify Razorpay payment and update appointment status"""
-    # Get appointment details
-    result = await db.execute(select(models.Appointment).where(models.Appointment.id == appointment_id))
-    appointment = result.scalar_one_or_none()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    
-    try:
-        # Initialize Razorpay client
-        razorpay_key_id = os.getenv("RAZORPAY_KEY_ID")
-        razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET")
-        
-        if not razorpay_key_id or not razorpay_key_secret:
-            raise HTTPException(status_code=500, detail="Razorpay credentials not configured")
-        
-        client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
-        
-        # Get payment details from request
-        razorpay_payment_id = payment_data.get("razorpay_payment_id")
-        razorpay_order_id = payment_data.get("razorpay_order_id")
-        razorpay_signature = payment_data.get("razorpay_signature")
-        
-        if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
-            raise HTTPException(status_code=400, detail="Missing payment verification data")
-        
-        # Verify payment signature
-        params_dict = {
-            'razorpay_order_id': razorpay_order_id,
-            'razorpay_payment_id': razorpay_payment_id,
-            'razorpay_signature': razorpay_signature
-        }
-        
-        client.utility.verify_payment_signature(params_dict)
-        
-        # Update appointment with payment details
-        appointment.payment_id = razorpay_payment_id
-        appointment.payment_signature = razorpay_signature
-        appointment.payment_status = "completed"
-        appointment.status = "confirmed"  # Update appointment status
-        
-        await db.commit()
-        
-        return {
-            "success": True,
-            "message": "Payment verified successfully",
-            "appointment_id": appointment_id
-        }
-        
-    except razorpay.errors.SignatureVerificationError:
-        # Update appointment status to failed
-        appointment.payment_status = "failed"
-        await db.commit()
-        raise HTTPException(status_code=400, detail="Payment verification failed")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error verifying payment: {str(e)}")
-
     
     await db.delete(doctor)
     await db.commit()
@@ -2004,88 +1655,6 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
 @router.put("/treatments/{treatment_id}", response_model=schemas.TreatmentResponse)
 async def update_treatment(
     treatment_id: int,
-    treatment_data: schemas.TreatmentUpdate,
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(models.Treatment).where(models.Treatment.id == treatment_id))
-    treatment = result.scalar_one_or_none()
-    if not treatment:
-        raise HTTPException(status_code=404, detail="Treatment not found")
-    
-    for key, value in treatment_data.dict(exclude_unset=True).items():
-        setattr(treatment, key, value)
-    
-    await db.commit()
-    await db.refresh(treatment)
-    
-    return treatment_to_dict(treatment)
-
-
-@router.get("/doctors/{doctor_id}", response_model=schemas.DoctorResponse)
-async def get_doctor(doctor_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(models.Doctor)
-        .options(
-            selectinload(models.Doctor.hospital),
-            selectinload(models.Doctor.hospitals)
-        )
-        .where(models.Doctor.id == doctor_id)
-    )
-    doctor = result.scalar_one_or_none()
-    if not doctor:
-        raise HTTPException(status_code=404, detail="Doctor not found")
-    
-    # Load images for the doctor within the session
-    images_result = await db.execute(
-        select(models.Image).where(
-            and_(
-                models.Image.owner_id == doctor.id,
-                models.Image.owner_type == 'doctor'
-            )
-        ).order_by(models.Image.position)
-    )
-    images = images_result.scalars().all()
-    
-    # Load FAQs for the doctor
-    faqs_result = await db.execute(
-        select(models.FAQ).where(
-            and_(
-                models.FAQ.owner_id == doctor.id,
-                models.FAQ.owner_type == 'doctor',
-                models.FAQ.is_active == True
-            )
-        ).order_by(models.FAQ.position)
-    )
-    faqs = faqs_result.scalars().all()
-    
-    doctor_dict = doctor_to_dict(doctor)
-    doctor_dict['images'] = [
-        {
-            "id": img.id,
-            "url": img.url,
-            "is_primary": img.is_primary,
-            "position": img.position,
-            "uploaded_at": img.uploaded_at
-        } for img in images
-    ]
-    doctor_dict['faqs'] = [
-        {
-            "id": faq.id,
-            "owner_type": faq.owner_type,
-            "owner_id": faq.owner_id,
-            "question": faq.question,
-            "answer": faq.answer,
-            "position": faq.position,
-            "is_active": faq.is_active,
-            "created_at": faq.created_at,
-            "updated_at": faq.updated_at
-        } for faq in faqs
-    ]
-    
-    return doctor_dict
-
-async def update_treatment(
-    treatment_id: int,
     treatment_update: schemas.TreatmentUpdate,
     current_admin: models.Admin = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db)
@@ -3057,28 +2626,7 @@ async def create_partner(
     db.add(db_partner)
     await db.commit()
     await db.refresh(db_partner)
-    
-    # Load the partner with hospital relationship for the response
-    result = await db.execute(
-        select(models.PartnerHospital)
-        .options(selectinload(models.PartnerHospital.hospital))
-        .where(models.PartnerHospital.id == db_partner.id)
-    )
-    fresh_partner = result.scalar_one()
-    
-    return fresh_partner
-
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List
-
-from app import models, schemas
-from app.dependencies import get_db, get_current_admin
-
-router = APIRouter()
+    return db_partner
 
 
 @router.get("/partners", response_model=List[schemas.PartnerHospitalResponse])
@@ -3087,13 +2635,10 @@ async def get_partners(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all partner hospitals for frontend display"""
-    query = select(models.PartnerHospital).options(
-        selectinload(models.PartnerHospital.hospital)
-    ).order_by(models.PartnerHospital.created_at.desc())
+    query = select(models.PartnerHospital).order_by(models.PartnerHospital.position, models.PartnerHospital.created_at.desc())
     
-    # Note: PartnerHospital model doesn't have is_active field yet
-    # if active_only:
-    #     query = query.where(models.PartnerHospital.is_active == True)
+    if active_only:
+        query = query.where(models.PartnerHospital.is_active == True)
     
     result = await db.execute(query)
     partners = result.scalars().all()
@@ -3104,11 +2649,7 @@ async def get_partners(
 @router.get("/partners/{partner_id}", response_model=schemas.PartnerHospitalResponse)
 async def get_partner(partner_id: int, db: AsyncSession = Depends(get_db)):
     """Get a specific partner hospital by ID"""
-    result = await db.execute(
-        select(models.PartnerHospital)
-        .options(selectinload(models.PartnerHospital.hospital))
-        .where(models.PartnerHospital.id == partner_id)
-    )
+    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
     partner = result.scalar_one_or_none()
     
     if not partner:
@@ -3125,11 +2666,7 @@ async def update_partner(
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing partner hospital (admin only)"""
-    result = await db.execute(
-        select(models.PartnerHospital)
-        .options(selectinload(models.PartnerHospital.hospital))
-        .where(models.PartnerHospital.id == partner_id)
-    )
+    result = await db.execute(select(models.PartnerHospital).where(models.PartnerHospital.id == partner_id))
     partner = result.scalar_one_or_none()
     if not partner:
         raise HTTPException(status_code=404, detail="Partner hospital not found")
