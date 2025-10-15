@@ -1595,6 +1595,7 @@ async def get_booking_details(
             "treatment_type": booking.treatment.treatment_type if booking.treatment else "N/A"
         } if booking.treatment else None,
         "budget": booking.budget,
+        "preferred_time_slot": booking.preferred_time_slot,
         "medical_history_file": booking.medical_history_file,
         "doctor_preference": doctor_preference_resolved,
         "hospital_preference": hospital_preference_resolved,

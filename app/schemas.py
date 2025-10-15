@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, validator, ConfigDict
 from pydantic import Field
 
@@ -348,7 +348,7 @@ class DoctorResponse(BaseSchema):
     qualifications: Optional[str] = None
     highlights: Optional[str] = None
     awards: Optional[str] = None
-    time_slots: Optional[str] = None  # JSON string containing availability for each day of the week
+    time_slots: Optional[Dict[str, Any]] = None  # Parsed JSON dict of availability per day
     is_featured: bool = False
     is_active: bool = True
     created_at: datetime
@@ -527,6 +527,7 @@ class PackageBookingBase(BaseModel):
     medical_history_file: Optional[str] = None
     doctor_preference: Optional[str] = None
     hospital_preference: Optional[str] = None
+    preferred_time_slot: Optional[str] = None
     user_query: Optional[str] = None
     travel_assistant: bool = False
     stay_assistant: bool = False
@@ -547,6 +548,7 @@ class PackageBookingUpdate(BaseModel):
     medical_history_file: Optional[str] = None
     doctor_preference: Optional[str] = None
     hospital_preference: Optional[str] = None
+    preferred_time_slot: Optional[str] = None
     user_query: Optional[str] = None
     travel_assistant: Optional[bool] = None
     stay_assistant: Optional[bool] = None

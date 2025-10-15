@@ -133,6 +133,7 @@
                         <th>Contact</th>
                         <th>Treatment</th>
                         <th>Budget</th>
+                        <th>Preferred Slot</th>
                         <th>Date</th>
                         <th>Services</th>
                         <th>Actions</th>
@@ -171,6 +172,13 @@
                             <span class="badge bg-success">{{ booking.budget }}</span>
                             {% else %}
                             <span class="text-muted">Not specified</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if booking.preferred_time_slot %}
+                            <span class="badge bg-secondary">{{ booking.preferred_time_slot }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>
@@ -336,6 +344,7 @@
                         <tr><td><strong>Email:</strong></td><td>${booking.email}</td></tr>
                         <tr><td><strong>Mobile:</strong></td><td>${booking.mobile_no}</td></tr>
                         <tr><td><strong>Budget:</strong></td><td>${booking.budget || 'Not specified'}</td></tr>
+                        <tr><td><strong>Preferred Slot:</strong></td><td>${booking.preferred_time_slot || '-'}</td></tr>
                     </table>
                 </div>
                 <div class="col-md-6">

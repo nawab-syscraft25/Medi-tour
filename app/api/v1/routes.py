@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
+import json
 import os
 import uuid
 from pathlib import Path
@@ -49,6 +50,17 @@ def hospital_to_dict(hospital: models.Hospital) -> dict:
 
 def doctor_to_dict(doctor: models.Doctor) -> dict:
     """Convert Doctor model to dict for safe serialization"""
+    # parse time_slots JSON if present into a dict for clients
+    time_slots_parsed = {}
+    try:
+        if doctor.time_slots:
+            if isinstance(doctor.time_slots, str):
+                time_slots_parsed = json.loads(doctor.time_slots)
+            elif isinstance(doctor.time_slots, dict):
+                time_slots_parsed = doctor.time_slots
+    except Exception:
+        time_slots_parsed = {}
+
     return {
         "id": doctor.id,
         "name": doctor.name,
@@ -68,7 +80,7 @@ def doctor_to_dict(doctor: models.Doctor) -> dict:
         "highlights": doctor.highlights,
         "awards": doctor.awards,
         "location": doctor.location,
-        "time_slots": doctor.time_slots,
+    "time_slots": time_slots_parsed,
         "is_featured": doctor.is_featured if doctor.is_featured is not None else False,
         "is_active": doctor.is_active if doctor.is_active is not None else True,
         "created_at": doctor.created_at,
@@ -1694,52 +1706,7 @@ async def delete_treatment(
     "/bookings", 
     response_model=schemas.PackageBookingResponse,
     summary="Create Booking with File Upload",
-    description="""
-    Create a new booking with optional medical file upload.
-    
-    **IMPORTANT:** This endpoint requires `multipart/form-data` for file uploads.
-    For JSON-only requests (no files), use `/bookings/json` instead.
-    
-    **Content-Type:** multipart/form-data
-    **Supported File Types:** PDF, JPG, PNG, TXT, DOC, DOCX
-    **Max File Size:** 10MB
-    
-    **✅ Correct JavaScript Example:**
-    ```javascript
-    const formData = new FormData();
-    formData.append('first_name', 'John');
-    formData.append('last_name', 'Doe');
-    formData.append('email', 'john@example.com');
-    formData.append('mobile_no', '+1234567890');
-    formData.append('treatment_id', '1'); // Optional
-    formData.append('medical_history_file', fileInput.files[0]); // File object
-    
-    fetch('/api/v1/bookings', {
-        method: 'POST',
-        body: formData // NO Content-Type header needed
-    });
-    ```
-    
-    **❌ Wrong - Don't send JSON to this endpoint:**
-    ```javascript
-    // This will fail - use /bookings/json instead
-    fetch('/api/v1/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({...}) // This will fail
-    });
-    ```
-    
-    **Example using curl:**
-    ```bash
-    curl -X POST "http://localhost:8001/api/v1/bookings" \\
-         -F "first_name=John" \\
-         -F "last_name=Doe" \\
-         -F "email=john@example.com" \\
-         -F "mobile_no=+1234567890" \\
-         -F "medical_history_file=@/path/to/medical_file.pdf"
-    ```
-    """,
+    description="""Create a new booking with optional medical file upload.""",
     tags=["bookings", "file-upload"]
 )
 async def create_booking(
@@ -1752,6 +1719,7 @@ async def create_booking(
     doctor_preference: Optional[str] = Form(None, description="Preferred doctor name"),
     hospital_preference: Optional[str] = Form(None, description="Preferred hospital name"),
     user_query: Optional[str] = Form(None, description="Additional queries or requirements"),
+    preferred_time_slot: Optional[str] = Form(None, description="Preferred time slot (e.g. 'Morning', '2025-10-20 10:00')"),
     travel_assistant: Optional[bool] = Form(False, description="Request travel assistance"),
     stay_assistant: Optional[bool] = Form(False, description="Request accommodation assistance"),
     personal_assistant: Optional[bool] = Form(False, description="Request personal assistant"),
@@ -1828,6 +1796,7 @@ async def create_booking(
         "doctor_preference": doctor_preference,
         "hospital_preference": hospital_preference,
         "user_query": user_query,
+        "preferred_time_slot": preferred_time_slot,
         "travel_assistant": travel_assistant,
         "stay_assistant": stay_assistant,
         "personal_assistant": personal_assistant
