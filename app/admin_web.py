@@ -4770,8 +4770,64 @@ async def admin_blog_update(
         if not blog:
             raise HTTPException(status_code=404, detail="Blog not found")
         
-        # Handle featured image upload
+        # Parse additional form fields (deletion of existing images)
+        form = await request.form()
+
+        # Handle removal of existing content images (checkboxes named image_delete[])
+        image_delete_ids = []
+        try:
+            # form.getlist is supported for multi-value fields
+            image_delete_ids = [int(v) for v in form.getlist('image_delete[]') if v]
+        except Exception:
+            # fallback: single value
+            v = form.get('image_delete[]')
+            if v:
+                try:
+                    image_delete_ids = [int(v)]
+                except Exception:
+                    image_delete_ids = []
+
+        if image_delete_ids:
+            # Load images and delete file + DB rows
+            images_to_delete = await db.execute(
+                select(Image).where(Image.id.in_(image_delete_ids), Image.owner_type == 'blog')
+            )
+            images_to_delete = images_to_delete.scalars().all()
+            for img in images_to_delete:
+                # delete file on disk if present
+                try:
+                    filename = os.path.basename(img.url or '')
+                    file_path = os.path.join('media', 'blog', filename)
+                    if filename and os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception:
+                    pass
+                try:
+                    await db.delete(img)
+                except Exception:
+                    pass
+
+        # Handle featured image deletion (single checkbox 'featured_image_delete')
+        featured_image_delete_flag = False
+        try:
+            if form.get('featured_image_delete'):
+                featured_image_delete_flag = True
+        except Exception:
+            featured_image_delete_flag = False
+
+        # If requested, delete existing featured image file and clear field
         featured_image_url = blog.featured_image
+        if featured_image_delete_flag and featured_image_url:
+            try:
+                fname = os.path.basename(featured_image_url)
+                fpath = os.path.join('media', 'blog', fname)
+                if fname and os.path.exists(fpath):
+                    os.remove(fpath)
+            except Exception:
+                pass
+            featured_image_url = None
+
+        # Handle featured image upload (if a new file was uploaded, it will replace deleted/old)
         if featured_image and featured_image.filename:
             filename = await save_uploaded_file(featured_image, "blog")
             if filename:

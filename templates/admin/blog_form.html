@@ -168,10 +168,16 @@
                     <div class="mb-3">
                         <label for="featured_image" class="form-label">Featured Image</label>
                         {% if blog and blog.featured_image %}
-                            <div class="mb-2">
+                            <div class="mb-2 d-flex align-items-start gap-2">
                                 <img src="{{ blog.featured_image }}" alt="Current featured image" 
-                                     class="img-thumbnail" style="max-width: 200px; max-height: 120px;">
-                                <div class="form-text">Current featured image</div>
+                                     class="img-thumbnail" style="max-width: 200px; max-height: 120px;" />
+                                <div>
+                                    <div class="form-text mb-2">Current featured image</div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="featured_image_delete" value="true" id="featured_image_delete">
+                                        <label class="form-check-label small text-danger" for="featured_image_delete">Remove featured image</label>
+                                    </div>
+                                </div>
                             </div>
                         {% endif %}
                         <input type="file" class="form-control" id="featured_image" name="featured_image" accept="image/*">
@@ -194,10 +200,16 @@
                                     <div class="card">
                                         <img src="{{ image.url }}" class="card-img-top" style="height: 120px; object-fit: cover;">
                                         <div class="card-body p-2">
-                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" 
-                                                    onclick="insertImageToEditor('{{ image.url }}')">
-                                                Insert to Content
-                                            </button>
+                                            <div class="d-grid gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                        onclick="insertImageToEditor('{{ image.url }}')">
+                                                    Insert to Content
+                                                </button>
+                                                <div class="form-check mt-1">
+                                                    <input class="form-check-input" type="checkbox" name="image_delete[]" value="{{ image.id }}" id="imgdel-{{ image.id }}">
+                                                    <label class="form-check-label small text-danger" for="imgdel-{{ image.id }}">Remove image</label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
