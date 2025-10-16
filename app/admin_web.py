@@ -4202,7 +4202,24 @@ async def admin_about_us_edit(item_id: int, request: Request, session_token: Opt
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="AboutUs not found")
-    return templates.TemplateResponse("admin/about_us_form.html", {"request": request, "admin": admin, "item": item, "action": "edit"})
+    # Fetch images for the about section
+    about_images_result = await db.execute(
+        select(Image).where(Image.owner_type == 'about_us', Image.owner_id == item_id).order_by(Image.position.asc().nullslast(), Image.id.asc())
+    )
+    about_images = about_images_result.scalars().all()
+
+    # Fetch images for featured cards and group them by owner_id (card id)
+    featured_images_map = {}
+    card_ids = [c.id for c in item.featured_cards] if item.featured_cards else []
+    if card_ids:
+        feat_imgs_res = await db.execute(
+            select(Image).where(Image.owner_type == 'featured_card', Image.owner_id.in_(card_ids)).order_by(Image.position.asc().nullslast(), Image.id.asc())
+        )
+        feat_imgs = feat_imgs_res.scalars().all()
+        for img in feat_imgs:
+            featured_images_map.setdefault(img.owner_id, []).append(img)
+
+    return templates.TemplateResponse("admin/about_us_form.html", {"request": request, "admin": admin, "item": item, "action": "edit", "about_images": about_images, "featured_images_map": featured_images_map})
 
 
 @router.post("/admin/about-us")
@@ -4248,14 +4265,44 @@ async def admin_about_us_create(request: Request,
         # Flush to ensure about.id is available for featured cards
         await db.flush()
 
-        # Process featured cards submitted as arrays in the form
+        # Process form data (including files)
         form = await request.form()
+        # Handle about images (uploads + deletes)
+        about_image_deletes = form.getlist('image_delete[]') if hasattr(form, 'getlist') else []
+        about_images = form.getlist('about_images[]') if hasattr(form, 'getlist') else []
+
+        # Delete requested existing images for this about entry (unlikely on create but safe)
+        for img_id in about_image_deletes:
+            try:
+                await db.execute(delete(Image).where(Image.id == int(img_id)))
+            except Exception:
+                pass
+
+        # Save uploaded about images
+        img_count = 0
+        for img_file in about_images:
+            if img_file and getattr(img_file, 'filename', None):
+                try:
+                    filename = await save_uploaded_file(img_file, 'about_us')
+                    image = Image(
+                        owner_type='about_us',
+                        owner_id=about.id,
+                        url=f"/media/about_us/{filename}",
+                        is_primary=(img_count == 0),
+                        position=img_count
+                    )
+                    db.add(image)
+                    img_count += 1
+                except Exception:
+                    # ignore individual image failures
+                    pass
         # FormData supports getlist for repeated fields
         featured_ids = form.getlist('featured_id[]') if hasattr(form, 'getlist') else []
         featured_headings = form.getlist('featured_heading[]') if hasattr(form, 'getlist') else []
         featured_descriptions = form.getlist('featured_description[]') if hasattr(form, 'getlist') else []
         featured_positions = form.getlist('featured_position[]') if hasattr(form, 'getlist') else []
         featured_deletes = form.getlist('featured_delete[]') if hasattr(form, 'getlist') else []
+        featured_files = form.getlist('featured_image[]') if hasattr(form, 'getlist') else []
 
         max_len = max(len(featured_headings), len(featured_ids), len(featured_positions), len(featured_descriptions)) if featured_headings else 0
         for i in range(max_len):
@@ -4285,16 +4332,33 @@ async def admin_about_us_create(request: Request,
                         card.position = fpos
                         db.add(card)
                 # else: ignore invalid id
-            else:
-                # New card (only create if there's content)
-                if fheading or fdesc:
-                    new_card = FeaturedCard(
-                        about_us_id=about.id,
-                        heading=fheading or None,
-                        description=fdesc or None,
-                        position=fpos
-                    )
-                    db.add(new_card)
+                else:
+                    # New card (only create if there's content)
+                    if fheading or fdesc:
+                        new_card = FeaturedCard(
+                            about_us_id=about.id,
+                            heading=fheading or None,
+                            description=fdesc or None,
+                            position=fpos
+                        )
+                        db.add(new_card)
+                        # flush to get new_card.id for image association
+                        await db.flush()
+                        # Attach image if uploaded for this new card
+                        ffile = featured_files[i] if i < len(featured_files) else None
+                        if ffile and getattr(ffile, 'filename', None):
+                            try:
+                                fname = await save_uploaded_file(ffile, 'featured_card')
+                                img = Image(
+                                    owner_type='featured_card',
+                                    owner_id=new_card.id,
+                                    url=f"/media/featured_card/{fname}",
+                                    is_primary=True,
+                                    position=0
+                                )
+                                db.add(img)
+                            except Exception:
+                                pass
 
         await db.commit()
         return RedirectResponse(url="/admin/about-us", status_code=302)
@@ -4354,13 +4418,50 @@ async def admin_about_us_update(item_id: int,
     try:
         db.add(about)
 
-        # Process featured cards from form
+        # Process featured cards and image uploads from form
         form = await request.form()
+
+        # About images handling (existing deletes + new uploads)
+        about_image_deletes = form.getlist('image_delete[]') if hasattr(form, 'getlist') else []
+        about_images = form.getlist('about_images[]') if hasattr(form, 'getlist') else []
+
+        for img_id in about_image_deletes:
+            try:
+                await db.execute(delete(Image).where(Image.id == int(img_id)))
+            except Exception:
+                pass
+
+        img_count = await db.scalar(select(func.count(Image.id)).where(Image.owner_type == 'about_us', Image.owner_id == about.id))
+        if img_count is None:
+            img_count = 0
+        else:
+            try:
+                img_count = int(img_count)
+            except Exception:
+                img_count = 0
+
+        for img_file in about_images:
+            if img_file and getattr(img_file, 'filename', None):
+                try:
+                    filename = await save_uploaded_file(img_file, 'about_us')
+                    image = Image(
+                        owner_type='about_us',
+                        owner_id=about.id,
+                        url=f"/media/about_us/{filename}",
+                        is_primary=(img_count == 0),
+                        position=img_count
+                    )
+                    db.add(image)
+                    img_count += 1
+                except Exception:
+                    pass
+
         featured_ids = form.getlist('featured_id[]') if hasattr(form, 'getlist') else []
         featured_headings = form.getlist('featured_heading[]') if hasattr(form, 'getlist') else []
         featured_descriptions = form.getlist('featured_description[]') if hasattr(form, 'getlist') else []
         featured_positions = form.getlist('featured_position[]') if hasattr(form, 'getlist') else []
         featured_deletes = form.getlist('featured_delete[]') if hasattr(form, 'getlist') else []
+        featured_files = form.getlist('featured_image[]') if hasattr(form, 'getlist') else []
 
         max_len = max(len(featured_headings), len(featured_ids), len(featured_positions), len(featured_descriptions)) if featured_headings else 0
         for i in range(max_len):
