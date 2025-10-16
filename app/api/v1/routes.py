@@ -2649,6 +2649,17 @@ async def get_about_us_list(db: AsyncSession = Depends(get_db)):
     items = result.scalars().all()
     # Eager-load featured cards for each item within the session
     about_list = []
+    # Prepare lists of ids for batch image queries
+    about_ids = [it.id for it in items]
+    # batch fetch about images
+    about_images_map = {}
+    if about_ids:
+        imgs_res = await db.execute(
+            select(models.Image).where(models.Image.owner_type == 'about_us', models.Image.owner_id.in_(about_ids)).order_by(models.Image.position.asc().nullslast(), models.Image.id.asc())
+        )
+        imgs = imgs_res.scalars().all()
+        for img in imgs:
+            about_images_map.setdefault(img.owner_id, []).append(img)
     for item in items:
         # load featured cards
         fc_result = await db.execute(
@@ -2667,7 +2678,7 @@ async def get_about_us_list(db: AsyncSession = Depends(get_db)):
             for fc in fcs
         ]
 
-        about_list.append({
+    about_list.append({
             "id": item.id,
             "heading": item.heading,
             "description": item.description,
@@ -2686,6 +2697,16 @@ async def get_about_us_list(db: AsyncSession = Depends(get_db)):
             "created_at": item.created_at,
             "updated_at": item.updated_at,
             "featured_cards": featured_cards_data,
+            # include images for about section
+            "images": [
+                {
+                    "id": img.id,
+                    "url": img.url,
+                    "is_primary": img.is_primary,
+                    "position": img.position,
+                    "uploaded_at": img.uploaded_at
+                } for img in about_images_map.get(item.id, [])
+            ]
         })
 
     return about_list
@@ -2712,6 +2733,29 @@ async def get_about_us(about_id: int, db: AsyncSession = Depends(get_db)):
         }
         for fc in fcs
     ]
+    # load images for the about section
+    images_result = await db.execute(
+        select(models.Image).where(models.Image.owner_type == 'about_us', models.Image.owner_id == item.id).order_by(models.Image.position.asc().nullslast(), models.Image.id.asc())
+    )
+    images = images_result.scalars().all()
+
+    # attach images to featured cards as well
+    # fetch featured card ids
+    card_ids = [fc.id for fc in fcs] if fcs else []
+    featured_images_map = {}
+    if card_ids:
+        feat_imgs_res = await db.execute(
+            select(models.Image).where(models.Image.owner_type == 'featured_card', models.Image.owner_id.in_(card_ids)).order_by(models.Image.position.asc().nullslast(), models.Image.id.asc())
+        )
+        feat_imgs = feat_imgs_res.scalars().all()
+        for img in feat_imgs:
+            featured_images_map.setdefault(img.owner_id, []).append({
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            })
 
     return {
         "id": item.id,
@@ -2731,7 +2775,28 @@ async def get_about_us(about_id: int, db: AsyncSession = Depends(get_db)):
         "is_active": item.is_active,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
-        "featured_cards": featured_cards_data,
+        "featured_cards": [
+            {
+                **{
+                    "id": fc["id"],
+                    "about_us_id": fc["about_us_id"],
+                    "heading": fc["heading"],
+                    "description": fc["description"],
+                    "position": fc["position"],
+                    "created_at": fc["created_at"],
+                },
+                "images": featured_images_map.get(fc["id"], [])
+            } for fc in featured_cards_data
+        ],
+        "images": [
+            {
+                "id": img.id,
+                "url": img.url,
+                "is_primary": img.is_primary,
+                "position": img.position,
+                "uploaded_at": img.uploaded_at
+            } for img in images
+        ],
     }
 
 

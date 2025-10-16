@@ -1034,6 +1034,7 @@ class FeaturedCardResponse(BaseSchema):
     description: Optional[str] = None
     position: int
     created_at: datetime
+    images: List[ImageResponse] = []
 
 
 class AboutUsBase(BaseModel):
@@ -1058,6 +1059,7 @@ class AboutUsResponse(AboutUsBase, BaseSchema):
     created_at: datetime
     updated_at: datetime
     featured_cards: List[FeaturedCardResponse] = []
+    images: List[ImageResponse] = []
 
 
 class ContactUsPageResponse(BaseSchema):
