@@ -33,6 +33,38 @@ from app.core.config import settings
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
+# Specializations file path (admin-managed list stored as JSON)
+SPECIALIZATIONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'specializations.json')
+
+
+def load_admin_specializations():
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(SPECIALIZATIONS_FILE), exist_ok=True)
+        # If file missing, create with empty list
+        if not os.path.exists(SPECIALIZATIONS_FILE):
+            with open(SPECIALIZATIONS_FILE, 'w', encoding='utf-8') as f:
+                json.dump([], f)
+
+        with open(SPECIALIZATIONS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+    except Exception:
+        pass
+    return []
+
+
+def save_admin_specializations(items: List[str]):
+    try:
+        os.makedirs(os.path.dirname(SPECIALIZATIONS_FILE), exist_ok=True)
+        with open(SPECIALIZATIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+
 # Add custom Jinja2 filters
 def nl2br(value):
     """Convert newlines to <br> tags"""
@@ -2111,14 +2143,96 @@ async def admin_doctor_new(
     # Get hospitals for dropdown
     hospitals = await db.execute(select(Hospital).order_by(Hospital.name))
     hospitals = hospitals.scalars().all()
-    
+    # Build specializations list: distinct specializations from doctors + admin-managed list
+    try:
+        distinct_spec_result = await db.execute(select(func.distinct(Doctor.specialization)).where(Doctor.specialization.isnot(None)))
+        distinct_specs = [s for s in (x for x in distinct_spec_result.scalars().all()) if s]
+    except Exception:
+        distinct_specs = []
+
+    admin_specs = load_admin_specializations()
+    # Merge preserving order and uniqueness
+    specs = []
+    for s in admin_specs + distinct_specs:
+        s = str(s).strip()
+        if s and s not in specs:
+            specs.append(s)
+
     return render_template("admin/doctor_form.html", {
         "request": request,
         "admin": admin,
         "doctor": None,
         "hospitals": hospitals,
+        "specializations": specs,
         "action": "Create"
     })
+
+
+@router.get("/admin/specializations", response_class=JSONResponse)
+async def get_specializations(admin: dict = Depends(require_admin_login), db: AsyncSession = Depends(get_db)):
+    """Return merged list of specializations (admin-managed + distinct from doctors)"""
+    try:
+        distinct_spec_result = await db.execute(select(func.distinct(Doctor.specialization)).where(Doctor.specialization.isnot(None)))
+        distinct_specs = [s for s in (x for x in distinct_spec_result.scalars().all()) if s]
+    except Exception:
+        distinct_specs = []
+
+    admin_specs = load_admin_specializations()
+    specs = []
+    for s in admin_specs + distinct_specs:
+        s = str(s).strip()
+        if s and s not in specs:
+            specs.append(s)
+
+    return JSONResponse({"specializations": specs})
+
+
+@router.post("/admin/specializations/add", response_class=JSONResponse)
+async def add_specialization(name: str = Form(...), admin: dict = Depends(require_admin_login)):
+    name = str(name).strip()
+    if not name:
+        return JSONResponse({"success": False, "message": "Invalid name"}, status_code=400)
+
+    current = load_admin_specializations()
+    if name in current:
+        return JSONResponse({"success": False, "message": "Already exists"}, status_code=400)
+
+    current.insert(0, name)
+    save_admin_specializations(current)
+    return JSONResponse({"success": True, "specializations": current})
+
+
+@router.post("/admin/specializations/rename", response_class=JSONResponse)
+async def rename_specialization(old: str = Form(...), new: str = Form(...), admin: dict = Depends(require_admin_login)):
+    old = str(old).strip()
+    new = str(new).strip()
+    if not old or not new:
+        return JSONResponse({"success": False, "message": "Invalid parameters"}, status_code=400)
+
+    current = load_admin_specializations()
+    if old not in current:
+        return JSONResponse({"success": False, "message": "Not found"}, status_code=404)
+    if new in current:
+        return JSONResponse({"success": False, "message": "New name already exists"}, status_code=400)
+
+    current = [new if x == old else x for x in current]
+    save_admin_specializations(current)
+    return JSONResponse({"success": True, "specializations": current})
+
+
+@router.post("/admin/specializations/delete", response_class=JSONResponse)
+async def delete_specialization(name: str = Form(...), admin: dict = Depends(require_admin_login)):
+    name = str(name).strip()
+    if not name:
+        return JSONResponse({"success": False, "message": "Invalid name"}, status_code=400)
+
+    current = load_admin_specializations()
+    if name not in current:
+        return JSONResponse({"success": False, "message": "Not found"}, status_code=404)
+
+    current = [x for x in current if x != name]
+    save_admin_specializations(current)
+    return JSONResponse({"success": True, "specializations": current})
 
 @router.get("/admin/doctors/{doctor_id}/edit", response_class=HTMLResponse)
 async def admin_doctor_edit(
@@ -2175,6 +2289,20 @@ async def admin_doctor_edit(
         print(f"DEBUG DOCTOR EDIT: FAQ {i+1}: Q='{faq.question}', A='{faq.answer}'")
         print(f"DEBUG DOCTOR EDIT: FAQ {i+1} Answer repr: {repr(faq.answer)}")
     
+    # Build specializations list for edit form
+    try:
+        distinct_spec_result = await db.execute(select(func.distinct(Doctor.specialization)).where(Doctor.specialization.isnot(None)))
+        distinct_specs = [s for s in (x for x in distinct_spec_result.scalars().all()) if s]
+    except Exception:
+        distinct_specs = []
+
+    admin_specs = load_admin_specializations()
+    specs = []
+    for s in admin_specs + distinct_specs:
+        s = str(s).strip()
+        if s and s not in specs:
+            specs.append(s)
+
     return render_template("admin/doctor_form.html", {
         "request": request,
         "admin": admin,
@@ -2182,6 +2310,7 @@ async def admin_doctor_edit(
         "hospitals": hospitals,
         "doctor_faqs": doctor_faqs,
         "doctor_images": doctor_images,
+        "specializations": specs,
         "action": "Update"
     })
 

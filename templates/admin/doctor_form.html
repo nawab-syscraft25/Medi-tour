@@ -80,7 +80,6 @@
                             <div class="form-text">Select all hospitals where this doctor practices</div>
                         </div>
                     </div>
-
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="location" class="form-label">City (Location)</label>
@@ -158,10 +157,71 @@
                     
                     <div class="mb-3">
                         <label for="specialization" class="form-label">Specialization</label>
-                        <input type="text" class="form-control" id="specialization" name="specialization" 
-                               value="{{ doctor.specialization if doctor else '' }}" 
-                               placeholder="Interventional Cardiology">
-                        <div class="form-text">Primary medical specialization</div>
+                        <div class="input-group">
+                            <select class="form-select" id="specialization" name="specialization">
+                                <option value="">Select Specialization</option>
+                                {% if specializations %}
+                                    {% for spec in specializations %}
+                                    <option value="{{ spec }}" {% if doctor and doctor.specialization == spec %}selected{% endif %}>{{ spec }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            <button type="button" class="btn btn-outline-success" id="addSpecBtn" title="Add New Specialization">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            {% if action == 'Update' %}
+                            <button type="button" class="btn btn-outline-primary" id="renameSpecBtn" title="Rename Selected Specialization">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="deleteSpecBtn" title="Delete Selected Specialization">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">Choose a specialization or add a new one. Admin-managed list (stored in JSON) + distinct values from existing doctors.</div>
+                    </div>
+
+                    <!-- Add/Rename/Delete Specialization Modals -->
+                    <div class="modal fade" id="addSpecModal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Add Specialization</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label for="newSpecName" class="form-label">Specialization Name</label>
+                                        <input type="text" class="form-control" id="newSpecName" placeholder="e.g., Interventional Cardiology">
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="confirmAddSpec">Add</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="renameSpecModal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Rename Specialization</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label for="renameSpecName" class="form-label">New Name</label>
+                                        <input type="text" class="form-control" id="renameSpecName" placeholder="Enter new specialization name">
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="confirmRenameSpec">Rename</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -778,6 +838,87 @@ document.addEventListener('DOMContentLoaded', function() {
     if (form) {
         form.addEventListener('submit', function(e) {
             updateTimeSlotsHiddenInput();
+        });
+    }
+});
+</script>
+
+<script>
+// Specialization management
+document.addEventListener('DOMContentLoaded', function() {
+    const addBtn = document.getElementById('addSpecBtn');
+    const renameBtn = document.getElementById('renameSpecBtn');
+    const deleteBtn = document.getElementById('deleteSpecBtn');
+    const specSelect = document.getElementById('specialization');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            new bootstrap.Modal(document.getElementById('addSpecModal')).show();
+        });
+    }
+
+    if (document.getElementById('confirmAddSpec')) {
+        document.getElementById('confirmAddSpec').addEventListener('click', async function() {
+            const name = document.getElementById('newSpecName').value.trim();
+            if (!name) return alert('Enter specialization name');
+
+            const fd = new FormData(); fd.append('name', name);
+            const resp = await fetch('/admin/specializations/add', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data.success) {
+                // Prepend new option and select it
+                const opt = document.createElement('option'); opt.value = name; opt.text = name; opt.selected = true;
+                specSelect.insertBefore(opt, specSelect.children[1] || null);
+                bootstrap.Modal.getInstance(document.getElementById('addSpecModal')).hide();
+                document.getElementById('newSpecName').value = '';
+            } else {
+                alert(data.message || 'Failed to add');
+            }
+        });
+    }
+
+    if (renameBtn) {
+        renameBtn.addEventListener('click', function() {
+            const cur = specSelect.value;
+            if (!cur) return alert('Select specialization to rename');
+            document.getElementById('renameSpecName').value = '';
+            new bootstrap.Modal(document.getElementById('renameSpecModal')).show();
+        });
+    }
+
+    if (document.getElementById('confirmRenameSpec')) {
+        document.getElementById('confirmRenameSpec').addEventListener('click', async function() {
+            const old = specSelect.value;
+            const nw = document.getElementById('renameSpecName').value.trim();
+            if (!old || !nw) return alert('Select and enter new name');
+            const fd = new FormData(); fd.append('old', old); fd.append('new', nw);
+            const resp = await fetch('/admin/specializations/rename', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data.success) {
+                // Update select option text/value
+                const opt = specSelect.querySelector(`option[value="${CSS.escape(old)}"]`);
+                if (opt) { opt.value = nw; opt.text = nw; opt.selected = true; }
+                bootstrap.Modal.getInstance(document.getElementById('renameSpecModal')).hide();
+            } else {
+                alert(data.message || 'Rename failed');
+            }
+        });
+    }
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async function() {
+            const cur = specSelect.value;
+            if (!cur) return alert('Select specialization to delete');
+            if (!confirm('Delete specialization from admin-managed list? This will not remove values already saved on doctors.')) return;
+            const fd = new FormData(); fd.append('name', cur);
+            const resp = await fetch('/admin/specializations/delete', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (data.success) {
+                const opt = specSelect.querySelector(`option[value="${CSS.escape(cur)}"]`);
+                if (opt) opt.remove();
+            } else {
+                alert(data.message || 'Delete failed');
+            }
         });
     }
 });
