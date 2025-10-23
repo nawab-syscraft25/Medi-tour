@@ -712,24 +712,66 @@ document.addEventListener('DOMContentLoaded', function() {
     const timeInputs = document.querySelectorAll('.time-input');
     const timeSlotsInput = document.getElementById('time_slots');
     
-    // Initialize time slots from hidden input
+    // Initialize time slots from hidden input (robust parsing)
     if (timeSlotsInput && timeSlotsInput.value) {
-        try {
-            const slots = JSON.parse(timeSlotsInput.value);
+        let raw = timeSlotsInput.value.trim();
+        let slots = null;
+
+        const tryParse = (s) => {
+            try { return JSON.parse(s); } catch (e) { return null; }
+        };
+
+        // 1) Try direct JSON parse
+        slots = tryParse(raw);
+
+        // 2) Try HTML-decoded JSON (Jinja may HTML-escape the value in the input)
+        if (!slots) {
+            try {
+                const ta = document.createElement('textarea');
+                ta.innerHTML = raw;
+                const decoded = ta.value;
+                slots = tryParse(decoded);
+                if (!slots) {
+                    // fallback: replace common HTML entities then try
+                    const replaced = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+                    slots = tryParse(replaced);
+                }
+            } catch (e) {
+                // ignore decoding errors
+                slots = null;
+            }
+        }
+
+        // 3) If still not parsed, try line-based parsing like "Monday: 9:00 AM - 5:00 PM"
+        if (!slots) {
+            const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            if (lines.length > 0) {
+                slots = {};
+                lines.forEach(line => {
+                    const m = line.match(/^([^:]+):\s*(.+)$/);
+                    if (m) {
+                        slots[m[1].trim()] = m[2].trim();
+                    }
+                });
+                if (Object.keys(slots).length === 0) slots = null;
+            }
+        }
+
+        // 4) If we have a slots object, apply values to inputs
+        if (slots) {
             Object.keys(slots).forEach(day => {
                 const dayLower = day.toLowerCase();
-                if (slots[day] !== 'Off') {
-                    const times = slots[day].split(' - ');
+                const val = slots[day];
+                if (val && val !== 'Off') {
+                    const times = String(val).split(' - ');
                     if (times.length === 2) {
-                        // Convert time format for input
-                        const startTime = timeToInputFormat(times[0]);
-                        const endTime = timeToInputFormat(times[1]);
-                        
-                        // Set values and enable inputs
+                        const startTime = timeToInputFormat(times[0].trim());
+                        const endTime = timeToInputFormat(times[1].trim());
+
                         const startInput = document.getElementById(`${dayLower}_start`);
                         const endInput = document.getElementById(`${dayLower}_end`);
                         const toggle = document.getElementById(`${dayLower}_available`);
-                        
+
                         if (startInput && endInput && toggle) {
                             startInput.value = startTime;
                             endInput.value = endTime;
@@ -739,16 +781,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 } else {
-                    // Day is off, ensure toggle is unchecked
-                    const dayLower = day.toLowerCase();
                     const toggle = document.getElementById(`${dayLower}_available`);
-                    if (toggle) {
-                        toggle.checked = false;
-                    }
+                    if (toggle) toggle.checked = false;
                 }
             });
-        } catch (e) {
-            console.log('Error parsing time slots:', e);
         }
     }
     
@@ -774,9 +810,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Update time slots when time inputs change
+    // Update time slots when time inputs change (listen to both change and input for immediacy)
     timeInputs.forEach(input => {
         input.addEventListener('change', updateTimeSlotsHiddenInput);
+        input.addEventListener('input', updateTimeSlotsHiddenInput);
     });
     
     // Update the hidden time_slots input
