@@ -2221,18 +2221,35 @@ async def rename_specialization(old: str = Form(...), new: str = Form(...), admi
 
 
 @router.post("/admin/specializations/delete", response_class=JSONResponse)
-async def delete_specialization(name: str = Form(...), admin: dict = Depends(require_admin_login)):
+async def delete_specialization(name: str = Form(...), admin: dict = Depends(require_admin_login), db: AsyncSession = Depends(get_db)):
     name = str(name).strip()
     if not name:
         return JSONResponse({"success": False, "message": "Invalid name"}, status_code=400)
 
     current = load_admin_specializations()
-    if name not in current:
-        return JSONResponse({"success": False, "message": "Not found"}, status_code=404)
+    # If it's in admin-managed list, remove it there
+    if name in current:
+        current = [x for x in current if x != name]
+        save_admin_specializations(current)
+        return JSONResponse({"success": True, "message": "Removed from admin-managed list", "specializations": current})
 
-    current = [x for x in current if x != name]
-    save_admin_specializations(current)
-    return JSONResponse({"success": True, "specializations": current})
+    # Not in admin list — attempt to remove from doctor rows (set to NULL)
+    try:
+        # Count matching doctors
+        cnt_result = await db.execute(select(func.count(Doctor.id)).where(Doctor.specialization == name))
+        match_count = cnt_result.scalar() or 0
+
+        if match_count == 0:
+            return JSONResponse({"success": False, "message": "Specialization not found in admin list or doctor records"}, status_code=404)
+
+        # Update doctors setting specialization to NULL
+        await db.execute(update(Doctor).where(Doctor.specialization == name).values(specialization=None))
+        await db.commit()
+
+        return JSONResponse({"success": True, "message": f"Cleared specialization from {match_count} doctor(s)", "affected": match_count})
+    except Exception as e:
+        await db.rollback()
+        return JSONResponse({"success": False, "message": f"Error clearing specialization: {str(e)}"}, status_code=500)
 
 @router.get("/admin/doctors/{doctor_id}/edit", response_class=HTMLResponse)
 async def admin_doctor_edit(
