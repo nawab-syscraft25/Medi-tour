@@ -84,7 +84,7 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="location" class="form-label">City (Location)</label>
-                            <input type="text" class="form-control" id="location" name="location"
+                            <input type="text" required class="form-control" id="location" name="location"
                                    value="{{ doctor.location if doctor else '' }}" placeholder="City, e.g., New Delhi">
                             <div class="form-text">City where the doctor primarily practices (stored as <code>location</code>).</div>
                         </div>
