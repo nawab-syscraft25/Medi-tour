@@ -166,9 +166,9 @@
                                                 <span class="d-block text-primary"><i class="fas fa-hospital me-1"></i> {{ treatment.other_hospital_name }}</span>
                                                 {% endif %}
                                                 {% if treatment.doctor %}
-                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i> Dr. {{ treatment.doctor.name }}</span>
+                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i>{{ treatment.doctor.name }}</span>
                                                 {% elif treatment.other_doctor_name %}
-                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i> Dr. {{ treatment.other_doctor_name }}</span>
+                                                <span class="d-block text-success"><i class="fas fa-user-md me-1"></i>{{ treatment.other_doctor_name }}</span>
                                                 {% endif %}
                                             </div>
                                         </div>
@@ -390,7 +390,7 @@ function populateFilterOptions() {
     sortedDoctors.forEach(doctor => {
         const option = document.createElement('option');
         option.value = doctor;
-        option.textContent = 'Dr. ' + doctor.charAt(0).toUpperCase() + doctor.slice(1);
+        option.textContent = doctor.charAt(0).toUpperCase() + doctor.slice(1);
         doctorFilter.appendChild(option);
     });
     

@@ -118,7 +118,7 @@
                         <td>
                             <div class="d-flex align-items-center">
                                 <div>
-                                    <strong>Dr. {{ doctor.name }}</strong>
+                                    <strong>{{ doctor.name }}</strong>
                                     {% if doctor.qualification %}
                                     <br>
                                     <small class="text-muted">{{ doctor.qualification }}</small>
@@ -211,7 +211,7 @@
                                         title="Delete"
                                         data-type="doctor"
                                         data-id="{{ doctor.id }}"
-                                        data-name="Dr. {{ doctor.name }}">
+                                        data-name="{{ doctor.name }}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
