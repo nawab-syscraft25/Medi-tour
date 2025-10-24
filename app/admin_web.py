@@ -1636,6 +1636,7 @@ async def get_booking_details(
         "travel_assistant": booking.travel_assistant,
         "stay_assistant": booking.stay_assistant,
         "personal_assistant": booking.personal_assistant,
+        "is_ayushman_treatment": getattr(booking, 'is_ayushman_treatment', False),
         "created_at": booking.created_at.isoformat() if booking.created_at else None
     }
 
