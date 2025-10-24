@@ -11,6 +11,12 @@ doctor_hospital_association = Table('doctor_hospital_association', Base.metadata
     Column('hospital_id', Integer, ForeignKey('hospitals.id'), primary_key=True)
 )
 
+# Association table for many-to-many relationship between Treatment and Doctor
+treatment_doctor_association = Table('treatment_doctor_association', Base.metadata,
+    Column('treatment_id', Integer, ForeignKey('treatments.id'), primary_key=True),
+    Column('doctor_id', Integer, ForeignKey('doctors.id'), primary_key=True)
+)
+
 class Image(Base):
     __tablename__ = "images"
     id = Column(Integer, primary_key=True, index=True)
@@ -131,6 +137,8 @@ class Doctor(Base):
     faqs = relationship("FAQ", 
                        primaryjoin="and_(Doctor.id == foreign(FAQ.owner_id), FAQ.owner_type == 'doctor')",
                        lazy="select", viewonly=True)
+    # Treatments where this doctor is selected as an associated doctor
+    associated_treatments = relationship("Treatment", secondary=treatment_doctor_association, back_populates="associated_doctors", lazy="noload")
     
     @property
     def description(self) -> str:
@@ -192,12 +200,24 @@ class Treatment(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     hospital = relationship("Hospital", back_populates="tours", lazy="noload")
     doctor = relationship("Doctor", lazy="noload")
+    # Many-to-many associated doctors (admin can select multiple)
+    associated_doctors = relationship("Doctor", secondary=treatment_doctor_association, back_populates="associated_treatments", lazy="noload")
     images = relationship("Image", 
                          primaryjoin="and_(Treatment.id == foreign(Image.owner_id), Image.owner_type == 'treatment')",
                          lazy="select", viewonly=True)
     faqs = relationship("FAQ", 
                        primaryjoin="and_(Treatment.id == foreign(FAQ.owner_id), FAQ.owner_type == 'treatment')",
                        lazy="select", viewonly=True)
+
+    @property
+    def associated_doctors_list(self):
+        """Return list of dicts [{id, name}] for associated doctors (convenience for admin/templates)."""
+        # If relationship is not loaded this will not implicitly load because of noload; however when accessed after session load it will work.
+        try:
+            return [{"id": d.id, "name": d.name} for d in (self.associated_doctors or [])]
+        except Exception:
+            # Safe fallback if relationship not available in this context
+            return []
 
 class PackageBooking(Base):
     __tablename__ = "package_bookings"

@@ -93,7 +93,7 @@
             <table class="table table-hover table-striped mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <!-- <th>ID</th> -->
+                        <th>Doctor ID</th>
                         <th>Name</th>
                         <th>Specialization</th>
                         <th>Hospital</th>
@@ -114,7 +114,7 @@
                         data-rating="{{ doctor.rating if doctor.rating else 0 }}"
                         data-status="{{ 'available' if doctor.is_active else 'unavailable' }}"
                         data-qualification="{{ doctor.qualification|lower if doctor.qualification else '' }}">
-                        <!-- <td><strong>#{{ doctor.id }}</strong></td> -->
+                        <td><strong>#00{{ doctor.id }}</strong></td>
                         <td>
                             <div class="d-flex align-items-center">
                                 <div>

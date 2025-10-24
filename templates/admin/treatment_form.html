@@ -143,7 +143,7 @@
                                 <option value="">Select Hospital</option>
                                 {% for hospital in hospitals %}
                                 <option value="{{ hospital.id }}" {% if treatment and treatment.hospital_id == hospital.id %}selected{% endif %}>
-                                    {{ hospital.name }}
+                                    #{{ hospital.id }} - {{ hospital.name }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -163,10 +163,26 @@
                                 <option value="">Select Doctor</option>
                                 {% for doctor in doctors %}
                                 <option value="{{ doctor.id }}" {% if treatment and treatment.doctor_id == doctor.id %}selected{% endif %}>
-                                    {{ doctor.name }}
+                                    #{{ doctor.id }} - {{ doctor.name }} ({{ doctor.specialization }})
                                 </option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Associated Doctors</label>
+                            <div class="border rounded p-2" style="max-height:220px; overflow:auto;">
+                                {% for d in doctors %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="associated_doctors" 
+                                           id="assoc_doc_{{ d.id }}" 
+                                           value="{{ d.id }}" 
+                                           {% if d.id in (associated_doctor_ids if associated_doctor_ids is defined else []) %}checked{% endif %}>
+                                    <label class="form-check-label" for="assoc_doc_{{ d.id }}">#{{d.id}} - {{ d.name }} ({{ d.specialization }})</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="form-text">Select one or more doctors associated with this treatment (use checkboxes).</div>
                         </div>
                         <div class="col-md-6">
                             <label for="other_doctor_name" class="form-label">Or Enter Doctor Name</label>

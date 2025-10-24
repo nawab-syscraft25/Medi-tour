@@ -1660,6 +1660,18 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
             "updated_at": faq.updated_at
         } for faq in faqs
     ]
+    # Load associated doctors (many-to-many)
+    try:
+        assoc_docs_result = await db.execute(
+            select(models.Doctor).join(
+                models.treatment_doctor_association,
+                models.Doctor.id == models.treatment_doctor_association.c.doctor_id
+            ).where(models.treatment_doctor_association.c.treatment_id == treatment.id).order_by(models.Doctor.name)
+        )
+        assoc_doctors = assoc_docs_result.scalars().all()
+        treatment_dict['associated_doctors'] = [doctor_to_dict(d) for d in assoc_doctors]
+    except Exception:
+        treatment_dict['associated_doctors'] = []
     
     return treatment_dict
 

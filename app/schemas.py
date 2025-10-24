@@ -510,6 +510,8 @@ class TreatmentResponse(BaseSchema):
     faq4_answer: Optional[str] = None
     faq5_question: Optional[str] = None
     faq5_answer: Optional[str] = None
+    # Associated doctors for this treatment
+    associated_doctors: List[DoctorResponse] = []
     
     @property
     def features_list(self) -> List[str]:

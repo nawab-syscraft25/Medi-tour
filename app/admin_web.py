@@ -25,7 +25,7 @@ import re
 import html
 
 from app.dependencies import get_db
-from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User, Appointment, doctor_hospital_association, AboutUs, FeaturedCard, ContactUsPage
+from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact, Image, Offer, PackageBooking, Blog, FAQ, Banner, PartnerHospital, PatientStory, User, Appointment, doctor_hospital_association, treatment_doctor_association, AboutUs, FeaturedCard, ContactUsPage
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
@@ -2353,6 +2353,12 @@ async def admin_treatment_new(
     
     # Get treatment types for dropdown
     treatment_types = await get_treatment_types(db)
+
+    # Fetch associated doctor ids for this treatment (so template can pre-select)
+    assoc_result = await db.execute(
+        select(treatment_doctor_association.c.doctor_id).where(treatment_doctor_association.c.treatment_id == treatment.id)
+    )
+    associated_doctor_ids = assoc_result.scalars().all()
     
     return render_template("admin/treatment_form.html", {
         "request": request,
@@ -2433,6 +2439,12 @@ async def admin_treatment_edit(
         print(f"WARNING: Mismatch in FAQ counts! Ordered query: {len(treatment_faqs)}, Direct query: {len(all_faqs_for_treatment)}")
         # Use the direct query result if there's a mismatch
         treatment_faqs = all_faqs_for_treatment
+
+    # Fetch associated doctor ids for this treatment (so template can pre-select)
+    assoc_result = await db.execute(
+        select(treatment_doctor_association.c.doctor_id).where(treatment_doctor_association.c.treatment_id == treatment.id)
+    )
+    associated_doctor_ids = assoc_result.scalars().all()
     
     return render_template("admin/treatment_form.html", {
         "request": request,
@@ -2443,6 +2455,7 @@ async def admin_treatment_edit(
         "doctors": doctors,
         "treatment_types": treatment_types,
         "treatment_faqs": treatment_faqs,
+        "associated_doctor_ids": associated_doctor_ids,
         "action": "Update"
     })
 
@@ -3399,6 +3412,7 @@ async def admin_treatment_create(
     faq_questions: List[str] = Form(default=[]),
     faq_answers: List[str] = Form(default=[]),
     images: List[UploadFile] = File(default=[]),
+    associated_doctors: List[int] = Form(default=[]),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -3460,6 +3474,21 @@ async def admin_treatment_create(
                     answer=answer.strip()
                 )
                 db.add(faq)
+
+        # Handle associated doctors (many-to-many)
+        try:
+            assoc_values = []
+            for did in associated_doctors:
+                try:
+                    did_int = int(did)
+                    assoc_values.append({"treatment_id": treatment.id, "doctor_id": did_int})
+                except Exception:
+                    continue
+            if assoc_values:
+                await db.execute(insert(treatment_doctor_association).values(assoc_values))
+        except Exception:
+            # Non-fatal: do not block creation if association insert fails; log if needed
+            pass
         
         await db.commit()
         return RedirectResponse(url="/admin/treatments", status_code=302)
@@ -3515,6 +3544,7 @@ async def admin_treatment_update(
     faq5_question: str = Form(""),
     faq5_answer: str = Form(""),
     images: List[UploadFile] = File(default=[]),
+    associated_doctors: List[int] = Form(default=[]),
     update_image_order: str = Form(None),
     delete_image_id: str = Form(None),
     set_primary_image: str = Form(None),
@@ -3739,6 +3769,27 @@ async def admin_treatment_update(
                     )
                     db.add(image)
                     next_position += 1
+
+        # Update associated doctors (many-to-many): replace existing with submitted list
+        try:
+            # Delete existing associations for this treatment
+            await db.execute(
+                delete(treatment_doctor_association).where(treatment_doctor_association.c.treatment_id == treatment.id)
+            )
+
+            # Insert new associations
+            assoc_values = []
+            for did in associated_doctors:
+                try:
+                    did_int = int(did)
+                    assoc_values.append({"treatment_id": treatment.id, "doctor_id": did_int})
+                except Exception:
+                    continue
+            if assoc_values:
+                await db.execute(insert(treatment_doctor_association).values(assoc_values))
+        except Exception as e:
+            # Non-fatal: log if needed but don't block update
+            print(f"Warning: failed to update associated doctors for treatment {treatment.id}: {e}")
 
         print(f"DEBUG: Updated FAQ fields for treatment {treatment.id}")
         
