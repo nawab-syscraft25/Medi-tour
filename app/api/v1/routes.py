@@ -1723,6 +1723,7 @@ async def create_booking(
     travel_assistant: Optional[bool] = Form(False, description="Request travel assistance"),
     stay_assistant: Optional[bool] = Form(False, description="Request accommodation assistance"),
     personal_assistant: Optional[bool] = Form(False, description="Request personal assistant"),
+    is_ayushman_treatment: Optional[bool] = Form(False, description="Is this booking for an Ayushman-covered treatment"),
     medical_history_file: Optional[UploadFile] = File(
         None, 
         description="📁 Upload medical history file (PDF, JPG, PNG, TXT, DOC, DOCX - Max 10MB)"
@@ -1797,6 +1798,7 @@ async def create_booking(
         "hospital_preference": hospital_preference,
         "user_query": user_query,
         "preferred_time_slot": preferred_time_slot,
+        "is_ayushman_treatment": is_ayushman_treatment,
         "travel_assistant": travel_assistant,
         "stay_assistant": stay_assistant,
         "personal_assistant": personal_assistant

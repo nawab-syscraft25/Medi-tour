@@ -5,7 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+.history/
+.history/app
 # Distribution / packaging
 .Python
 build/
@@ -150,3 +151,6 @@ alembic/versions/*.py
 
 systreack.py
 systreack
+.history/app/models_20250917125436.py
+.history/app/models_20250917122836.py
+.history/app/models_20250917123803.py

@@ -207,6 +207,11 @@
                                     <i class="fas fa-file-medical"></i>
                                 </span>
                                 {% endif %}
+                                {% if booking.is_ayushman_treatment %}
+                                <span class="badge bg-primary" title="Ayushman Bharat Covered">
+                                    <i class="fas fa-notes-medical"></i>
+                                </span>
+                                {% endif %}
                             </div>
                         </td>
                         <td>
@@ -354,6 +359,7 @@
                         <tr><td><strong>Type:</strong></td><td>${booking.treatment ? booking.treatment.treatment_type || 'N/A' : (booking.doctor_preference && booking.doctor_preference.trim() && booking.doctor_preference !== 'null' ? 'Virtual Consultation' : 'N/A')}</td></tr>
                         <tr><td><strong>Doctor Pref:</strong></td><td>${booking.doctor_preference || 'No preference'}</td></tr>
                         <tr><td><strong>Hospital Pref:</strong></td><td>${booking.hospital_preference || 'No preference'}</td></tr>
+                        <tr><td><strong>Ayushman Covered:</strong></td><td>${booking.is_ayushman_treatment ? 'Yes' : 'No'}</td></tr>
                     </table>
                 </div>
             </div>

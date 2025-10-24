@@ -212,6 +212,8 @@ class PackageBooking(Base):
     doctor_preference = Column(String(300), nullable=True)  # Doctor preference input string
     hospital_preference = Column(String(300), nullable=True)  # Hospital preference string
     preferred_time_slot = Column(String(200), nullable=True, default=None)
+    # Whether this booking is for an Ayushman Bharat covered treatment
+    is_ayushman_treatment = Column(Boolean, default=False)
     user_query = Column(Text, nullable=True)
     travel_assistant = Column(Boolean, default=False)
     stay_assistant = Column(Boolean, default=False)

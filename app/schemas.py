@@ -528,6 +528,7 @@ class PackageBookingBase(BaseModel):
     doctor_preference: Optional[str] = None
     hospital_preference: Optional[str] = None
     preferred_time_slot: Optional[str] = None
+    is_ayushman_treatment: bool = False
     user_query: Optional[str] = None
     travel_assistant: bool = False
     stay_assistant: bool = False
@@ -549,6 +550,7 @@ class PackageBookingUpdate(BaseModel):
     doctor_preference: Optional[str] = None
     hospital_preference: Optional[str] = None
     preferred_time_slot: Optional[str] = None
+    is_ayushman_treatment: Optional[bool] = None
     user_query: Optional[str] = None
     travel_assistant: Optional[bool] = None
     stay_assistant: Optional[bool] = None

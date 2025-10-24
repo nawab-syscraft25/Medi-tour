@@ -1458,7 +1458,7 @@ async def admin_bookings(
             'ID', 'First Name', 'Last Name', 'Email', 'Mobile', 
             'Treatment', 'Treatment Type', 'Budget', 'Doctor Preference', 
             'Hospital Preference', 'Travel Assistant', 'Stay Assistant', 
-            'Personal Assistant', 'Medical History File', 'User Query', 
+            'Personal Assistant', 'Medical History File', 'Is Ayushman', 'User Query', 
             'Created Date'
         ])
         
@@ -1479,6 +1479,7 @@ async def admin_bookings(
                 'Yes' if booking.stay_assistant else 'No',
                 'Yes' if booking.personal_assistant else 'No',
                 booking.medical_history_file or 'None',
+                'Yes' if getattr(booking, 'is_ayushman_treatment', False) else 'No',
                 booking.user_query or 'None',
                 booking.created_at.strftime('%Y-%m-%d %H:%M:%S') if booking.created_at else 'N/A'
             ])
