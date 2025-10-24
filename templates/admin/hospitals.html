@@ -83,7 +83,7 @@
             <table class="table table-hover table-striped mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <!-- <th>ID</th> -->
+                        <th>ID</th> 
                         <th>Name</th>
                         <th>Location</th>
                         <th>Specializations</th>
@@ -100,7 +100,7 @@
                         data-status="{{ 'active' if hospital.is_active else 'inactive' }}"
                         data-rating="{{ hospital.rating if hospital.rating else 0 }}"
                         data-name="{{ hospital.name|lower }}">
-                        <!-- <td><strong>#{{ hospital.id }}</strong></td> -->
+                       <td><strong>#{{ hospital.id }}</strong></td> 
                         <td>
                             <div class="d-flex align-items-center">
                                 <div>

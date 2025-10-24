@@ -114,7 +114,7 @@
                         data-rating="{{ doctor.rating if doctor.rating else 0 }}"
                         data-status="{{ 'available' if doctor.is_active else 'unavailable' }}"
                         data-qualification="{{ doctor.qualification|lower if doctor.qualification else '' }}">
-                        <td><strong>#00{{ doctor.id }}</strong></td>
+                        <td><strong>#{{ doctor.id }}</strong></td>
                         <td>
                             <div class="d-flex align-items-center">
                                 <div>
