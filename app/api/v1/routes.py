@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
 import json
+import re
 import os
 import uuid
 from pathlib import Path
@@ -1932,16 +1933,37 @@ async def get_locations(db: AsyncSession = Depends(get_db)):
     )
     doctor_locations = doctor_result.scalars().all()
     
-    # Combine and clean locations
-    all_locations = set()
+    # Combine, normalize and deduplicate city names
+    # Strategy:
+    #  - take the first segment before a comma/semicolon/slash/pipe
+    #  - strip whitespace and punctuation, lowercase for canonical dedupe
+    #  - ignore literal 'None', 'null', 'n/a' entries
+    all_locations_canonical = set()
+
     for location in hospital_locations + treatment_locations + doctor_locations:
-        if location and location.strip():
-            # Extract city name (everything before the first comma)
-            city = location.split(',')[0].strip()
-            if city:
-                all_locations.add(city)
-    
-    return sorted(list(all_locations))
+        if not location:
+            continue
+        loc = str(location).strip()
+        if not loc:
+            continue
+
+        # split on common separators and take the first part (city)
+        city_part = re.split(r"[;,/|]", loc)[0].strip()
+        if not city_part:
+            continue
+
+        # ignore obvious non-values
+        low = city_part.lower().strip()
+        if low in ("none", "null", "n/a", "na", ""):
+            continue
+
+        # normalize whitespace and trailing dots
+        canonical = re.sub(r"\s+", " ", low).strip().strip('.')
+        all_locations_canonical.add(canonical)
+
+    # Present results in readable title-case (one canonical city per entry)
+    result = [c.title() for c in sorted(all_locations_canonical)]
+    return result
 
 
 @router.get("/doctor-filters/locations", response_model=List[str])
