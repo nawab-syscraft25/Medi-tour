@@ -1954,7 +1954,7 @@ async def get_locations(db: AsyncSession = Depends(get_db)):
 
         # ignore obvious non-values
         low = city_part.lower().strip()
-        if low in ("none", "null", "n/a", "na", ""):
+        if low in ("none", "None", "null", "n/a", "na", "unknown", "undefined", "", "-"):
             continue
 
         # normalize whitespace and trailing dots
@@ -1968,41 +1968,40 @@ async def get_locations(db: AsyncSession = Depends(get_db)):
 
 @router.get("/doctor-filters/locations", response_model=List[str])
 async def get_doctor_locations(db: AsyncSession = Depends(get_db)):
-    """Get all unique locations from doctors for dropdown"""
-    # Get locations from doctors
-    doctor_result = await db.execute(
-        select(models.Doctor.location).distinct().where(models.Doctor.location.isnot(None))
-    )
-    doctor_locations = doctor_result.scalars().all()
-    
-    # Combine and clean locations
-    all_locations = set()
-    for location in doctor_locations:
-        if location and location.strip():
-            # Extract city name (everything before the first comma)
-            city = location.split(',')[0].strip()
-            if city:
-                all_locations.add(city)
-    
-    return sorted(list(all_locations))
+    """Get all unique city names from doctors for dropdown (normalized & deduped).
 
-@router.get("/doctor-filters/locations", response_model=List[str])
-async def get_doctor_locations(db: AsyncSession = Depends(get_db)):
-    """Get all unique locations from doctors for dropdown"""
+    Uses the same normalization rules as `/filters/locations`:
+      - split on common separators and take first segment
+      - ignore literal non-values (None, null, n/a, unknown, undefined, '-')
+      - canonicalize to lowercase for dedupe and return title-cased names
+    """
     # Get locations from doctors
     doctor_result = await db.execute(
         select(models.Doctor.location).distinct().where(models.Doctor.location.isnot(None))
     )
     doctor_locations = doctor_result.scalars().all()
-    
-    # Combine and clean locations
-    all_locations = set()
+
+    all_locations_canonical = set()
     for location in doctor_locations:
-        if location and location.strip():
-            # Extract city name (everything before the first comma)
-            city = location.split(',')[0].strip()
-            if city:
-                all_locations.add(city)
+        if not location:
+            continue
+        loc = str(location).strip()
+        if not loc:
+            continue
+
+        city_part = re.split(r"[;,/|]", loc)[0].strip()
+        if not city_part:
+            continue
+
+        low = city_part.lower().strip()
+        if low in ("none", "null", "n/a", "na", "unknown", "undefined", "", "-"):
+            continue
+
+        canonical = re.sub(r"\s+", " ", low).strip().strip('.')
+        all_locations_canonical.add(canonical)
+
+    result = [c.title() for c in sorted(all_locations_canonical)]
+    return result
     
     return sorted(list(all_locations))
 
