@@ -1312,6 +1312,7 @@ async def update_contact(
     subject: Optional[str] = Form(None),
     message: Optional[str] = Form(None),
     service_type: Optional[str] = Form(None),
+    admin_response: Optional[str] = Form(None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -1336,6 +1337,12 @@ async def update_contact(
     contact.subject = subject if subject else contact.subject
     contact.message = message if message else contact.message
     contact.service_type = service_type if service_type else contact.service_type
+    
+    # Update admin_response and set responded_at if a response is provided
+    if admin_response is not None and admin_response.strip():
+        contact.admin_response = admin_response
+        if not contact.responded_at:
+            contact.responded_at = datetime.utcnow()
     
     await db.commit()
     await db.refresh(contact)

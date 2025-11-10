@@ -339,6 +339,11 @@
                         <label for="editMessage" class="form-label">Message</label>
                         <textarea class="form-control" id="editMessage" name="message" rows="4"></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="editAdminResponse" class="form-label">Admin Response (Notes)</label>
+                        <textarea class="form-control" id="editAdminResponse" name="admin_response" rows="4" placeholder="Enter your response to the inquiry..."></textarea>
+                        <small class="form-text text-muted">This response can be sent to the customer via email.</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -546,7 +551,7 @@ function viewContactDetails(contactId) {
             ${contact.admin_response ? `
             <div class="row mt-3">
                 <div class="col-12">
-                    <h6 class="text-success">Admin Response</h6>
+                    <h6 class="text-success">Admin Response (Notes)</h6>
                     <div class="bg-success bg-opacity-10 p-3 rounded border border-success border-opacity-25">
                         <p class="mb-0">${contact.admin_response}</p>
                         ${contact.responded_at ? `<small class="text-muted">Responded on: ${new Date(contact.responded_at).toLocaleDateString()} at ${new Date(contact.responded_at).toLocaleTimeString()}</small>` : ''}
@@ -737,6 +742,7 @@ function editContact(contactId) {
         document.getElementById('editSubject').value = contact.subject || '';
         document.getElementById('editMessage').value = contact.message || '';
         document.getElementById('editServiceType').value = contact.service_type || '';
+        document.getElementById('editAdminResponse').value = contact.admin_response || '';
         
         // Store contact ID for form submission
         document.getElementById('editContactForm').dataset.contactId = contactId;
