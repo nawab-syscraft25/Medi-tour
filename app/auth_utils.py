@@ -65,6 +65,15 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[models.User
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
     """Send email using SMTP"""
     try:
+        # Validate email configuration
+        if not SMTP_SERVER or not SMTP_USERNAME or not SMTP_PASSWORD:
+            print(f"❌ Email configuration missing: SMTP_SERVER={SMTP_SERVER}, SMTP_USERNAME={SMTP_USERNAME}, SMTP_PASSWORD={'***' if SMTP_PASSWORD else 'None'}")
+            return False
+        
+        print(f"📧 Attempting to send email to {to_email}")
+        print(f"📧 Using SMTP: {SMTP_SERVER}:{SMTP_PORT}")
+        print(f"📧 From: {FROM_EMAIL}")
+        
         msg = MIMEMultipart()
         msg['From'] = FROM_EMAIL
         msg['To'] = to_email
@@ -81,9 +90,13 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
         text = msg.as_string()
         server.sendmail(FROM_EMAIL, to_email, text)
         server.quit()
+        
+        print(f"✅ Email sent successfully to {to_email}")
         return True
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
+        print(f"❌ Failed to send email to {to_email}: {str(e)}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 def send_verification_email(to_email: str, token: str, user_name: str, base_url: str = None):

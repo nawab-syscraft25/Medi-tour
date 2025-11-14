@@ -1104,6 +1104,8 @@ async def forgot_password(
     from app.auth_utils import generate_verification_token, send_password_reset_email
     from datetime import datetime, timedelta
     
+    print(f"🔐 Password reset request for email: {forgot_data.email}")
+    
     # Get user by email
     result = await db.execute(
         select(models.User).where(models.User.email == forgot_data.email)
@@ -1112,7 +1114,10 @@ async def forgot_password(
     
     if not user:
         # Don't reveal if email exists or not for security
+        print(f"⚠️ User not found for email: {forgot_data.email}")
         return {"message": "If the email exists, a password reset link has been sent"}
+    
+    print(f"✅ User found: {user.name} ({user.email})")
     
     # Generate password reset token
     reset_token = generate_verification_token()
@@ -1122,9 +1127,18 @@ async def forgot_password(
     user.password_reset_expires = reset_expires
     await db.commit()
     
+    print(f"🔑 Reset token generated and saved to database")
+    
     # Send password reset email
     base_url = f"{request.url.scheme}://{request.url.netloc}"
-    send_password_reset_email(user.email, reset_token, user.name, base_url)
+    print(f"📧 Sending password reset email to {user.email} with base_url: {base_url}")
+    
+    email_sent = send_password_reset_email(user.email, reset_token, user.name, base_url)
+    
+    if email_sent:
+        print(f"✅ Password reset email sent successfully to {user.email}")
+    else:
+        print(f"❌ Failed to send password reset email to {user.email}")
     
     return {"message": "If the email exists, a password reset link has been sent"}
 
@@ -1209,7 +1223,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
                     <h1 class="error">❌ Verification Failed</h1>
                     <p>The verification token is invalid or has expired.</p>
                     <p>Please request a new verification email or contact support.</p>
-                    <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                    <a href="https://cureonmedicaltourism.com/login" class="btn">Go to Login</a>
                 </div>
             </body>
             </html>
@@ -1243,7 +1257,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
                 <h1 class="success">✅ Email Verified Successfully!</h1>
                 <p>Your email address <span class="email">{user.email}</span> has been verified.</p>
                 <p>You can now access all features of CureOn Medical Tourism.</p>
-                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                <a href="https://cureonmedicaltourism.com/login" class="btn">Go to Login</a>
             </div>
         </body>
         </html>
@@ -1270,7 +1284,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
             <div class="container">
                 <h1 class="error">❌ Something went wrong</h1>
                 <p>An error occurred while verifying your email. Please try again later.</p>
-                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                <a href="https://cureonmedicaltourism.com/login" class="btn">Go to Login</a>
             </div>
         </body>
         </html>
@@ -1318,7 +1332,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
                     <h1 class="error">❌ Reset Link Expired</h1>
                     <p>The password reset token is invalid or has expired.</p>
                     <p>Please request a new password reset email.</p>
-                    <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                    <a href="https://cureonmedicaltourism.com/login" class="btn">Go to Login</a>
                 </div>
             </body>
             </html>
@@ -1373,7 +1387,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
                 </form>
                 
                 <div class="back-link">
-                    <a href="http://165.22.223.163:8090/login">← Back to Login</a>
+                    <a href="https://cureonmedicaltourism.com/login">← Back to Login</a>
                 </div>
             </div>
             
@@ -1430,7 +1444,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
                             
                             // Redirect to login after 2 seconds
                             setTimeout(() => {{
-                                window.location.href = 'http://165.22.223.163:8090/login';
+                                window.location.href = 'https://cureonmedicaltourism.com/login';
                             }}, 2000);
                         }} else {{
                             messageDiv.className = 'message error';
@@ -1473,7 +1487,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
             <div class="container">
                 <h1 class="error">❌ Something went wrong</h1>
                 <p>An error occurred while processing your password reset. Please try again later.</p>
-                <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
+                <a href="https://cureonmedicaltourism.com/login" class="btn">Go to Login</a>
             </div>
         </body>
         </html>
