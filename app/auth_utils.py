@@ -92,7 +92,7 @@ def send_verification_email(to_email: str, token: str, user_name: str, base_url:
     
     # Use current domain or fallback to localhost
     
-    base_url = "http://165.22.223.163:8001"
+    base_url = "https://portal.cureonmedicaltourism.com"
     
     verification_url = f"{base_url}/api/v1/verify-email?token={token}"
     
@@ -119,7 +119,7 @@ def send_password_reset_email(to_email: str, token: str, user_name: str, base_ur
     subject = "Reset Your Password - CureOn Medical Tourism"
     
     # Use current domain or fallback to localhost
-    base_url = "http://165.22.223.163:8001"
+    base_url = "https://portal.cureonmedicaltourism.com"
     
     reset_url = f"{base_url}/api/v1/reset-password?token={token}"
     
