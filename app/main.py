@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import os
@@ -85,13 +85,8 @@ async def health_check():
 # Root endpoint
 @app.get("/")
 async def root():
-    """Root endpoint with API information"""
-    return {
-        "message": "Welcome to CureOn Medical Tourism API",
-        "version": "1.0.0",
-        "docs": "/docs" if settings.debug else "Documentation disabled in production",
-        "health": "/health"
-    }
+    """Root endpoint - redirects to admin panel"""
+    return RedirectResponse(url="/admin")
 
 
 # Configure Jinja2 templates
