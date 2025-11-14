@@ -90,7 +90,7 @@ async def list_admins():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Medi-Tour Admin Management")
+    parser = argparse.ArgumentParser(description="CureOn Medical Tourism Management")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Create admin command

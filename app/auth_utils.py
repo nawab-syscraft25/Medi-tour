@@ -88,7 +88,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
 
 def send_verification_email(to_email: str, token: str, user_name: str, base_url: str = None):
     """Send email verification email"""
-    subject = "Verify Your Email - Medi-tour"
+    subject = "Verify Your Email - CureOn Medical Tourism"
     
     # Use current domain or fallback to localhost
     
@@ -99,7 +99,7 @@ def send_verification_email(to_email: str, token: str, user_name: str, base_url:
     body = f"""
     Hi {user_name},
     
-    Thank you for signing up with Medi-tour!
+    Thank you for signing up with CureOn Medical Tourism!
     
     Please click the link below to verify your email address:
     {verification_url}
@@ -109,14 +109,14 @@ def send_verification_email(to_email: str, token: str, user_name: str, base_url:
     If you didn't create an account with us, please ignore this email.
     
     Best regards,
-    Medi-tour Team
+    CureOn Medical Tourism Team
     """
     
     return send_email(to_email, subject, body)
 
 def send_password_reset_email(to_email: str, token: str, user_name: str, base_url: str = None):
     """Send password reset email"""
-    subject = "Reset Your Password - Medi-tour"
+    subject = "Reset Your Password - CureOn Medical Tourism"
     
     # Use current domain or fallback to localhost
     base_url = "http://165.22.223.163:8001"
@@ -126,7 +126,7 @@ def send_password_reset_email(to_email: str, token: str, user_name: str, base_ur
     body = f"""
     Hi {user_name},
     
-    You requested to reset your password for your Medi-tour account.
+    You requested to reset your password for your CureOn Medical Tourism account.
     
     Please click the link below to reset your password:
     {reset_url}
@@ -136,7 +136,7 @@ def send_password_reset_email(to_email: str, token: str, user_name: str, base_ur
     If you didn't request a password reset, please ignore this email.
     
     Best regards,
-    Medi-tour Team
+    CureOn Medical Tourism Team
     """
     
     return send_email(to_email, subject, body)

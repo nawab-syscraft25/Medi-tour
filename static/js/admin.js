@@ -1,4 +1,4 @@
-// Medi-Tour Admin Panel JavaScript
+// CureOn Medical Tourism Panel JavaScript
 
 // Global variables
 let currentPage = 1;
@@ -29,7 +29,7 @@ function initializeAdmin() {
     // Initialize notifications
     initializeNotifications();
     
-    console.log('Medi-Tour Admin Panel initialized');
+    console.log('CureOn Medical Tourism Panel initialized');
 }
 
 // Initialize Bootstrap tooltips

@@ -16,7 +16,7 @@ from app import models
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print("🚀 Starting Medi-Tour API...")
+    print("🚀 Starting CureOn Medical Tourism API...")
     
     # Create media directory for local uploads
     if settings.debug:
@@ -26,12 +26,12 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    print("🔄 Shutting down Medi-Tour API...")
+    print("🔄 Shutting down CureOn Medical Tourism API...")
 
 
 # Create FastAPI application
 app = FastAPI(
-    title="Medi-Tour API",
+    title="CureOn Medical Tourism API",
     description="A comprehensive REST API for medical tourism platform",
     version="1.0.0",
     docs_url="/docs" if settings.debug else None,
@@ -87,7 +87,7 @@ async def health_check():
 async def root():
     """Root endpoint with API information"""
     return {
-        "message": "Welcome to Medi-Tour API",
+        "message": "Welcome to CureOn Medical Tourism API",
         "version": "1.0.0",
         "docs": "/docs" if settings.debug else "Documentation disabled in production",
         "health": "/health"
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     import uvicorn
     
     print(f"""
-    🏥 Medi-Tour API Server
+    🏥 CureOn Medical Tourism API Server
     
     Environment: {settings.environment}
     Debug Mode: {settings.debug}

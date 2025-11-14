@@ -1195,7 +1195,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Verification Failed - Medi-tour</title>
+                <title>Verification Failed - CureOn Medical Tourism</title>
                 <style>
                     body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                     .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
@@ -1228,7 +1228,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Email Verified - Medi-tour</title>
+            <title>Email Verified - CureOn Medical Tourism</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
@@ -1242,7 +1242,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
             <div class="container">
                 <h1 class="success">✅ Email Verified Successfully!</h1>
                 <p>Your email address <span class="email">{user.email}</span> has been verified.</p>
-                <p>You can now access all features of Medi-tour.</p>
+                <p>You can now access all features of CureOn Medical Tourism.</p>
                 <a href="http://165.22.223.163:8090/login" class="btn">Go to Login</a>
             </div>
         </body>
@@ -1257,7 +1257,7 @@ async def verify_email_page(token: str, request: Request, db: AsyncSession = Dep
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Error - Medi-tour</title>
+            <title>Error - CureOn Medical Tourism</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
@@ -1304,7 +1304,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Reset Failed - Medi-tour</title>
+                <title>Reset Failed - CureOn Medical Tourism</title>
                 <style>
                     body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                     .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
@@ -1331,7 +1331,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reset Password - Medi-tour</title>
+            <title>Reset Password - CureOn Medical Tourism</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
@@ -1460,7 +1460,7 @@ async def reset_password_page(token: str, request: Request, db: AsyncSession = D
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Error - Medi-tour</title>
+            <title>Error - CureOn Medical Tourism</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
