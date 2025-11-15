@@ -84,8 +84,15 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
         else:
             msg.attach(MIMEText(body, 'plain'))
         
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
+        # Use SMTP_SSL for port 465, SMTP with starttls for port 587
+        if SMTP_PORT == 465:
+            # SSL/TLS connection (recommended for port 465)
+            server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        else:
+            # STARTTLS connection (for port 587)
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+            server.starttls()
+        
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
         text = msg.as_string()
         server.sendmail(FROM_EMAIL, to_email, text)
