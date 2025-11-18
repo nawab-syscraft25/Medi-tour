@@ -2360,12 +2360,6 @@ async def admin_treatment_new(
     
     # Get treatment types for dropdown
     treatment_types = await get_treatment_types(db)
-
-    # Fetch associated doctor ids for this treatment (so template can pre-select)
-    assoc_result = await db.execute(
-        select(treatment_doctor_association.c.doctor_id).where(treatment_doctor_association.c.treatment_id == treatment.id)
-    )
-    associated_doctor_ids = assoc_result.scalars().all()
     
     return render_template("admin/treatment_form.html", {
         "request": request,
