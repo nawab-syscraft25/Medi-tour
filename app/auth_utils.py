@@ -75,7 +75,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False):
         print(f"📧 From: {FROM_EMAIL}")
         
         msg = MIMEMultipart()
-        msg['From'] = FROM_EMAIL
+        msg['From'] = f"CureOn Medical Tourism <{FROM_EMAIL}>"
         msg['To'] = to_email
         msg['Subject'] = subject
         

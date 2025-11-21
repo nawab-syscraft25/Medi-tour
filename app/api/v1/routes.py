@@ -1617,6 +1617,60 @@ async def get_treatments(
                 "updated_at": faq.updated_at
             } for faq in faqs
         ]
+        
+        # Load primary doctor and associated doctors (many-to-many)
+        associated_doctors_list = []
+        
+        # First, add primary doctor if exists
+        if treatment.doctor_id:
+            try:
+                primary_doc_result = await db.execute(
+                    select(models.Doctor).where(models.Doctor.id == treatment.doctor_id)
+                )
+                primary_doctor = primary_doc_result.scalar_one_or_none()
+                if primary_doctor:
+                    associated_doctors_list.append({
+                        "id": primary_doctor.id,
+                        "name": primary_doctor.name,
+                        "profile_photo": primary_doctor.profile_photo,
+                        "short_description": primary_doctor.short_description,
+                        "designation": primary_doctor.designation,
+                        "specialization": primary_doctor.specialization,
+                        "qualification": primary_doctor.qualification,
+                        "experience_years": primary_doctor.experience_years,
+                        "created_at": primary_doctor.created_at
+                    })
+            except Exception:
+                pass
+        
+        # Then, add other associated doctors
+        try:
+            assoc_docs_result = await db.execute(
+                select(models.Doctor).join(
+                    models.treatment_doctor_association,
+                    models.Doctor.id == models.treatment_doctor_association.c.doctor_id
+                ).where(models.treatment_doctor_association.c.treatment_id == treatment.id).order_by(models.Doctor.name)
+            )
+            assoc_doctors = assoc_docs_result.scalars().all()
+            # Add associated doctors (excluding primary doctor to avoid duplication)
+            for d in assoc_doctors:
+                if d.id != treatment.doctor_id:
+                    associated_doctors_list.append({
+                        "id": d.id,
+                        "name": d.name,
+                        "profile_photo": d.profile_photo,
+                        "short_description": d.short_description,
+                        "designation": d.designation,
+                        "specialization": d.specialization,
+                        "qualification": d.qualification,
+                        "experience_years": d.experience_years,
+                        "created_at": d.created_at
+                    })
+        except Exception:
+            pass
+        
+        treatment_dict['associated_doctors'] = associated_doctors_list
+        
         treatment_dicts.append(treatment_dict)
     
     return treatment_dicts
@@ -1675,7 +1729,32 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
             "updated_at": faq.updated_at
         } for faq in faqs
     ]
-    # Load associated doctors (many-to-many)
+    # Load primary doctor and associated doctors (many-to-many)
+    associated_doctors_list = []
+    
+    # First, add primary doctor if exists
+    if treatment.doctor_id:
+        try:
+            primary_doc_result = await db.execute(
+                select(models.Doctor).where(models.Doctor.id == treatment.doctor_id)
+            )
+            primary_doctor = primary_doc_result.scalar_one_or_none()
+            if primary_doctor:
+                associated_doctors_list.append({
+                    "id": primary_doctor.id,
+                    "name": primary_doctor.name,
+                    "profile_photo": primary_doctor.profile_photo,
+                    "short_description": primary_doctor.short_description,
+                    "designation": primary_doctor.designation,
+                    "specialization": primary_doctor.specialization,
+                    "qualification": primary_doctor.qualification,
+                    "experience_years": primary_doctor.experience_years,
+                    "created_at": primary_doctor.created_at
+                })
+        except Exception:
+            pass
+    
+    # Then, add other associated doctors
     try:
         assoc_docs_result = await db.execute(
             select(models.Doctor).join(
@@ -1684,9 +1763,24 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
             ).where(models.treatment_doctor_association.c.treatment_id == treatment.id).order_by(models.Doctor.name)
         )
         assoc_doctors = assoc_docs_result.scalars().all()
-        treatment_dict['associated_doctors'] = [doctor_to_dict(d) for d in assoc_doctors]
+        # Add associated doctors (excluding primary doctor to avoid duplication)
+        for d in assoc_doctors:
+            if d.id != treatment.doctor_id:
+                associated_doctors_list.append({
+                    "id": d.id,
+                    "name": d.name,
+                    "profile_photo": d.profile_photo,
+                    "short_description": d.short_description,
+                    "designation": d.designation,
+                    "specialization": d.specialization,
+                    "qualification": d.qualification,
+                    "experience_years": d.experience_years,
+                    "created_at": d.created_at
+                })
     except Exception:
-        treatment_dict['associated_doctors'] = []
+        pass
+    
+    treatment_dict['associated_doctors'] = associated_doctors_list
     
     return treatment_dict
 

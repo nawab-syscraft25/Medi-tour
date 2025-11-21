@@ -329,6 +329,19 @@ class DoctorUpdate(BaseModel):
         return None
 
 
+class DoctorMinimalResponse(BaseSchema):
+    """Minimal doctor info for associated doctors in treatment responses"""
+    id: int
+    name: str
+    profile_photo: Optional[str] = None
+    short_description: Optional[str] = None
+    designation: Optional[str] = None
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
+    experience_years: Optional[int] = None
+    created_at: datetime
+
+
 class DoctorResponse(BaseSchema):
     id: int
     name: str
@@ -511,7 +524,7 @@ class TreatmentResponse(BaseSchema):
     faq5_question: Optional[str] = None
     faq5_answer: Optional[str] = None
     # Associated doctors for this treatment
-    associated_doctors: List[DoctorResponse] = []
+    associated_doctors: List[DoctorMinimalResponse] = []
     
     @property
     def features_list(self) -> List[str]:
