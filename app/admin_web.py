@@ -1644,7 +1644,14 @@ async def get_booking_details(
         "stay_assistant": booking.stay_assistant,
         "personal_assistant": booking.personal_assistant,
         "is_ayushman_treatment": getattr(booking, 'is_ayushman_treatment', False),
-        "created_at": booking.created_at.isoformat() if booking.created_at else None
+        "created_at": booking.created_at.isoformat() if booking.created_at else None,
+        # Payment fields
+        "amount": booking.amount,
+        "payment_status": booking.payment_status,
+        "razorpay_order_id": booking.razorpay_order_id,
+        "razorpay_payment_id": booking.razorpay_payment_id,
+        "razorpay_signature": booking.razorpay_signature,
+        "payment_date": booking.payment_date.isoformat() if booking.payment_date else None
     }
 
 @router.api_route("/admin/bookings/{booking_id}/download-medical-file", methods=["GET", "HEAD"])

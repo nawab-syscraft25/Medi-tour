@@ -548,6 +548,12 @@ class PackageBookingBase(BaseModel):
     travel_assistant: bool = False
     stay_assistant: bool = False
     personal_assistant: bool = False
+    amount: Optional[float] = None
+    payment_status: str = "pending"
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    payment_date: Optional[datetime] = None
 
 
 class PackageBookingCreate(PackageBookingBase):
@@ -575,6 +581,60 @@ class PackageBookingUpdate(BaseModel):
 class PackageBookingResponse(PackageBookingBase, BaseSchema):
     id: int
     created_at: datetime
+
+
+# Razorpay Payment schemas
+class RazorpayOrderCreate(BaseModel):
+    booking_id: int
+    amount: float  # Amount in INR
+
+
+class RazorpayOrderResponse(BaseModel):
+    razorpay_order_id: str
+    razorpay_key_id: str
+    amount: int  # Amount in paise
+    currency: str
+    booking_id: int
+
+
+class BookingWithPayment(BaseModel):
+    """Combined response for booking creation with Razorpay payment details"""
+    # Booking details
+    id: int
+    first_name: str
+    last_name: str
+    email: str
+    mobile_no: str
+    treatment_id: Optional[int] = None
+    budget: Optional[str] = None
+    doctor_preference: Optional[str] = None
+    hospital_preference: Optional[str] = None
+    user_query: Optional[str] = None
+    preferred_time_slot: Optional[str] = None
+    travel_assistant: Optional[bool] = False
+    stay_assistant: Optional[bool] = False
+    personal_assistant: Optional[bool] = False
+    is_ayushman_treatment: Optional[bool] = False
+    medical_history_file: Optional[str] = None
+    amount: Optional[float] = None
+    payment_status: Optional[str] = "pending"
+    created_at: datetime
+    
+    # Razorpay payment details
+    razorpay_order_id: Optional[str] = None
+    razorpay_key_id: str
+    amount_in_paise: int
+    currency: str
+    error: Optional[str] = None
+    
+    model_config = {"from_attributes": True}
+
+
+class RazorpayPaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    booking_id: int
 
 
 # Appointment schemas

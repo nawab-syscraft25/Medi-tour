@@ -238,6 +238,13 @@ class PackageBooking(Base):
     travel_assistant = Column(Boolean, default=False)
     stay_assistant = Column(Boolean, default=False)
     personal_assistant = Column(Boolean, default=False)
+    # Payment fields
+    amount = Column(Float, nullable=True)  # Booking amount in INR
+    payment_status = Column(String(50), default="pending")  # pending, paid, failed
+    razorpay_order_id = Column(String(100), nullable=True)
+    razorpay_payment_id = Column(String(100), nullable=True)
+    razorpay_signature = Column(String(200), nullable=True)
+    payment_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationship

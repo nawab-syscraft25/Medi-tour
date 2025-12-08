@@ -1,16 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 import json
 import re
 import os
 import uuid
+import razorpay
+import hmac
+import hashlib
 from pathlib import Path
 from app.db import get_db
 from app import models, schemas
 from app.dependencies import get_current_admin, get_current_user
+from app.core.config import settings
+import os
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = settings.razorpay_key_id or ""
+RAZORPAY_KEY_SECRET = settings.razorpay_key_secret or ""
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 
 def hospital_to_dict(hospital: models.Hospital) -> dict:
@@ -1825,7 +1836,7 @@ async def delete_treatment(
 # Package Booking endpoints
 @router.post(
     "/bookings", 
-    response_model=schemas.PackageBookingResponse,
+    response_model=schemas.BookingWithPayment,
     summary="Create Booking with File Upload",
     description="""Create a new booking with optional medical file upload.""",
     tags=["bookings", "file-upload"]
@@ -1835,6 +1846,7 @@ async def create_booking(
     last_name: str = Form(..., description="Patient's last name"),
     email: str = Form(..., description="Patient's email address"),
     mobile_no: str = Form(..., description="Patient's mobile number"),
+    amount: float = Form(..., description="Booking amount in INR"),
     treatment_id: Optional[int] = Form(None, description="Selected treatment ID (optional)"),
     budget: Optional[str] = Form(None, description="Budget range (e.g., '10k-20k')"),
     doctor_preference: Optional[str] = Form(None, description="Preferred doctor name"),
@@ -1851,7 +1863,7 @@ async def create_booking(
     ),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new booking with optional medical file upload"""
+    """Create a new booking with optional medical file upload and Razorpay payment integration"""
     
     medical_file_path = None
     
@@ -1922,14 +1934,92 @@ async def create_booking(
         "is_ayushman_treatment": is_ayushman_treatment,
         "travel_assistant": travel_assistant,
         "stay_assistant": stay_assistant,
-        "personal_assistant": personal_assistant
+        "personal_assistant": personal_assistant,
+        "amount": amount,
+        "payment_status": "pending"
     }
     
     db_booking = models.PackageBooking(**booking_data)
     db.add(db_booking)
     await db.commit()
     await db.refresh(db_booking)
-    return db_booking
+    
+    # Create Razorpay order
+    try:
+        # Convert amount to paise (Razorpay requires amount in smallest currency unit)
+        amount_in_paise = int(amount * 100)
+        
+        razorpay_order = razorpay_client.order.create({
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "receipt": f"booking_{db_booking.id}",
+            "notes": {
+                "booking_id": str(db_booking.id),
+                "patient_name": f"{first_name} {last_name}",
+                "email": email
+            }
+        })
+        
+        # Update booking with Razorpay order ID
+        db_booking.razorpay_order_id = razorpay_order['id']
+        await db.commit()
+        await db.refresh(db_booking)
+        
+        # Return booking with Razorpay order details
+        return schemas.BookingWithPayment(
+            id=db_booking.id,
+            first_name=db_booking.first_name,
+            last_name=db_booking.last_name,
+            email=db_booking.email,
+            mobile_no=db_booking.mobile_no,
+            treatment_id=db_booking.treatment_id,
+            budget=db_booking.budget,
+            doctor_preference=db_booking.doctor_preference,
+            hospital_preference=db_booking.hospital_preference,
+            user_query=db_booking.user_query,
+            preferred_time_slot=db_booking.preferred_time_slot,
+            travel_assistant=db_booking.travel_assistant,
+            stay_assistant=db_booking.stay_assistant,
+            personal_assistant=db_booking.personal_assistant,
+            is_ayushman_treatment=db_booking.is_ayushman_treatment,
+            medical_history_file=db_booking.medical_history_file,
+            amount=db_booking.amount,
+            payment_status=db_booking.payment_status,
+            created_at=db_booking.created_at,
+            razorpay_order_id=razorpay_order['id'],
+            razorpay_key_id=RAZORPAY_KEY_ID,
+            amount_in_paise=amount_in_paise,
+            currency="INR"
+        )
+    except Exception as e:
+        print(f"❌ Error creating Razorpay order: {str(e)}")
+        # Return booking even if Razorpay order creation fails
+        return schemas.BookingWithPayment(
+            id=db_booking.id,
+            first_name=db_booking.first_name,
+            last_name=db_booking.last_name,
+            email=db_booking.email,
+            mobile_no=db_booking.mobile_no,
+            treatment_id=db_booking.treatment_id,
+            budget=db_booking.budget,
+            doctor_preference=db_booking.doctor_preference,
+            hospital_preference=db_booking.hospital_preference,
+            user_query=db_booking.user_query,
+            preferred_time_slot=db_booking.preferred_time_slot,
+            travel_assistant=db_booking.travel_assistant,
+            stay_assistant=db_booking.stay_assistant,
+            personal_assistant=db_booking.personal_assistant,
+            is_ayushman_treatment=db_booking.is_ayushman_treatment,
+            medical_history_file=db_booking.medical_history_file,
+            amount=db_booking.amount,
+            payment_status=db_booking.payment_status,
+            created_at=db_booking.created_at,
+            razorpay_order_id=None,
+            razorpay_key_id=RAZORPAY_KEY_ID,
+            amount_in_paise=int(amount * 100),
+            currency="INR",
+            error="Failed to create payment order. Please contact support."
+        )
 
 
 @router.post(
@@ -2017,6 +2107,79 @@ async def download_booking_medical_file(
         filename=filename,
         media_type='application/octet-stream'
     )
+
+
+# Razorpay Payment Verification Endpoint
+@router.post("/bookings/verify-payment")
+async def verify_razorpay_payment(
+    payment_data: schemas.RazorpayPaymentVerification,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verify Razorpay payment signature and update booking status"""
+    
+    # Get booking
+    result = await db.execute(
+        select(models.PackageBooking).where(models.PackageBooking.id == payment_data.booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Verify payment signature
+    try:
+        # Create signature verification string
+        signature_payload = f"{payment_data.razorpay_order_id}|{payment_data.razorpay_payment_id}"
+        
+        # Generate expected signature
+        expected_signature = hmac.new(
+            RAZORPAY_KEY_SECRET.encode('utf-8'),
+            signature_payload.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Verify signature
+        if expected_signature == payment_data.razorpay_signature:
+            # Payment is verified - update booking
+            booking.payment_status = "paid"
+            booking.razorpay_payment_id = payment_data.razorpay_payment_id
+            booking.razorpay_signature = payment_data.razorpay_signature
+            booking.payment_date = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(booking)
+            
+            return {
+                "success": True,
+                "message": "Payment verified successfully",
+                "booking": booking
+            }
+        else:
+            # Signature verification failed
+            booking.payment_status = "failed"
+            await db.commit()
+            
+            raise HTTPException(
+                status_code=400,
+                detail="Payment verification failed. Invalid signature."
+            )
+            
+    except Exception as e:
+        print(f"❌ Payment verification error: {str(e)}")
+        booking.payment_status = "failed"
+        await db.commit()
+        
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment verification failed: {str(e)}"
+        )
+
+
+# Get Razorpay Key (Public endpoint for frontend)
+@router.get("/razorpay/key")
+async def get_razorpay_key():
+    """Get Razorpay public key for frontend integration"""
+    return {"razorpay_key_id": RAZORPAY_KEY_ID}
 
 
 # Dropdown/Filter Data Endpoints

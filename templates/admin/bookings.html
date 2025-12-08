@@ -132,7 +132,8 @@
                         <th>Patient Name</th>
                         <th>Contact</th>
                         <th>Treatment</th>
-                        <th>Budget</th>
+                        <th>Amount</th>
+                        <th>Payment Status</th>
                         <th>Preferred Slot</th>
                         <th>Date</th>
                         <th>Services</th>
@@ -168,10 +169,35 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if booking.budget %}
-                            <span class="badge bg-success">{{ booking.budget }}</span>
+                            {% if booking.amount %}
+                            <strong>₹{{ "%.2f"|format(booking.amount) }}</strong>
                             {% else %}
-                            <span class="text-muted">Not specified</span>
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if booking.payment_status == 'paid' %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-check-circle me-1"></i>Paid
+                            </span>
+                            {% if booking.razorpay_payment_id %}
+                            <br><small class="text-muted" title="Razorpay Payment ID">{{ booking.razorpay_payment_id[:20] }}...</small>
+                            {% endif %}
+                            {% elif booking.payment_status == 'pending' %}
+                            <span class="badge bg-warning">
+                                <i class="fas fa-clock me-1"></i>Pending
+                            </span>
+                            {% if booking.razorpay_order_id %}
+                            <br><small class="text-muted" title="Razorpay Order ID">{{ booking.razorpay_order_id[:20] }}...</small>
+                            {% endif %}
+                            {% elif booking.payment_status == 'failed' %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-times-circle me-1"></i>Failed
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">
+                                <i class="fas fa-question-circle me-1"></i>Unknown
+                            </span>
                             {% endif %}
                         </td>
                         <td>
@@ -182,7 +208,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            <small>{{ booking.created_at.strftime('%Y-%m-%d %H:%M') if booking.created_at else 'N/A'
+                            <small>{{ booking.created_at.strftime('%d-%m-%Y %I:%M %p') if booking.created_at else 'N/A'
                                 }}</small>
                         </td>
                         <td>
@@ -365,6 +391,42 @@
             </div>
             <div class="row mt-3">
                 <div class="col-12">
+                    <h6 class="text-primary">Payment Information</h6>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        <tr>
+                                            <td><strong>Amount:</strong></td>
+                                            <td><span class="h5 mb-0">${booking.amount ? '₹' + booking.amount.toFixed(2) : 'N/A'}</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Status:</strong></td>
+                                            <td>
+                                                ${booking.payment_status === 'paid' ? '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Paid</span>' : 
+                                                  booking.payment_status === 'pending' ? '<span class="badge bg-warning"><i class="fas fa-clock me-1"></i>Pending</span>' :
+                                                  booking.payment_status === 'failed' ? '<span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Failed</span>' :
+                                                  '<span class="badge bg-secondary">Unknown</span>'}
+                                            </td>
+                                        </tr>
+                                        ${booking.payment_date ? `<tr><td><strong>Payment Date:</strong></td><td>${new Date(booking.payment_date).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true})}</td></tr>` : ''}
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless mb-0">
+                                        ${booking.razorpay_order_id ? `<tr><td><strong>Order ID:</strong></td><td><small class="text-muted">${booking.razorpay_order_id}</small></td></tr>` : ''}
+                                        ${booking.razorpay_payment_id ? `<tr><td><strong>Payment ID:</strong></td><td><small class="text-muted">${booking.razorpay_payment_id}</small></td></tr>` : ''}
+                                        ${booking.razorpay_signature ? `<tr><td><strong>Signature:</strong></td><td><small class="text-muted">${booking.razorpay_signature.substring(0, 20)}...</small></td></tr>` : ''}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
                     <h6 class="text-primary">Additional Services</h6>
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         ${booking.travel_assistant ? '<span class="badge bg-info"><i class="fas fa-plane me-1"></i>Travel Assistant</span>' : ''}
@@ -387,7 +449,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <h6 class="text-primary">Booking Date</h6>
-                    <p class="mb-0">${booking.created_at ? new Date(booking.created_at).toLocaleString() : 'N/A'}</p>
+                    <p class="mb-0">${booking.created_at ? new Date(booking.created_at).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true}) : 'N/A'}</p>
                 </div>
                 <div class="col-md-6">
                     <h6 class="text-primary">Booking ID</h6>
