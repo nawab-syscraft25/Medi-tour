@@ -29,9 +29,15 @@ from app.models import Admin, Hospital, Doctor, Treatment, ContactUs as Contact,
 from app.schemas import TreatmentUpdate, HospitalUpdate, DoctorUpdate, BlogCreate, BlogUpdate
 from app.auth import verify_password
 from app.core.config import settings
+import razorpay
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = settings.razorpay_key_id or ""
+RAZORPAY_KEY_SECRET = settings.razorpay_key_secret or ""
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # Specializations file path (admin-managed list stored as JSON)
 SPECIALIZATIONS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'specializations.json')
@@ -1622,6 +1628,33 @@ async def get_booking_details(
     # Resolve preferences
     doctor_preference_resolved = await resolve_doctor_preference(booking.doctor_preference)
     hospital_preference_resolved = await resolve_hospital_preference(booking.hospital_preference)
+    
+    # Sync payment status from Razorpay if order exists and status is pending
+    if booking.razorpay_order_id and booking.payment_status == "pending":
+        try:
+            # Fetch payment status from Razorpay
+            order = razorpay_client.order.fetch(booking.razorpay_order_id)
+            
+            if order:
+                razorpay_status = order.get('status', '').lower()
+                
+                # Update booking status based on Razorpay order status
+                if razorpay_status == 'paid':
+                    booking.payment_status = "paid"
+                    await db.commit()
+                    await db.refresh(booking)
+                elif razorpay_status in ['attempted', 'created']:
+                    # Keep as pending
+                    pass
+                else:
+                    # Mark as failed for any other status
+                    booking.payment_status = "failed"
+                    await db.commit()
+                    await db.refresh(booking)
+        except Exception as e:
+            # If Razorpay API fails, keep current status
+            print(f"⚠️ Failed to fetch Razorpay order status: {str(e)}")
+            pass
     
     return {
         "id": booking.id,
