@@ -1632,27 +1632,59 @@ async def get_booking_details(
     # Sync payment status from Razorpay if order exists and status is pending
     if booking.razorpay_order_id and booking.payment_status == "pending":
         try:
-            # Fetch payment status from Razorpay
+            # Fetch order details from Razorpay
             order = razorpay_client.order.fetch(booking.razorpay_order_id)
+            
+            print(f"📊 Razorpay Order Status for {booking.razorpay_order_id}: {order}")
             
             if order:
                 razorpay_status = order.get('status', '').lower()
+                amount_paid = order.get('amount_paid', 0)
                 
-                # Update booking status based on Razorpay order status
-                if razorpay_status == 'paid':
+                print(f"💰 Order Status: {razorpay_status}, Amount Paid: {amount_paid}")
+                
+                # Check if order is paid
+                if razorpay_status == 'paid' or amount_paid > 0:
                     booking.payment_status = "paid"
                     await db.commit()
                     await db.refresh(booking)
-                elif razorpay_status in ['attempted', 'created']:
-                    # Keep as pending
-                    pass
+                    print(f"✅ Updated booking {booking.id} to PAID")
                 else:
-                    # Mark as failed for any other status
-                    booking.payment_status = "failed"
-                    await db.commit()
-                    await db.refresh(booking)
+                    # Check for failed payment attempts
+                    try:
+                        payments = razorpay_client.order.payments(booking.razorpay_order_id)
+                        payment_items = payments.get('items', [])
+                        
+                        print(f"🔍 Found {len(payment_items)} payment attempts")
+                        
+                        if payment_items:
+                            # Check if any payment failed
+                            has_failed = any(p.get('status') == 'failed' for p in payment_items)
+                            has_authorized = any(p.get('status') == 'authorized' for p in payment_items)
+                            
+                            if has_authorized:
+                                booking.payment_status = "paid"
+                                await db.commit()
+                                await db.refresh(booking)
+                                print(f"✅ Updated booking {booking.id} to PAID (authorized)")
+                            elif has_failed:
+                                booking.payment_status = "failed"
+                                await db.commit()
+                                await db.refresh(booking)
+                                print(f"❌ Updated booking {booking.id} to FAILED (payment failed)")
+                            else:
+                                print(f"⏳ Booking {booking.id} still PENDING (no failed/authorized payments)")
+                        elif razorpay_status == 'attempted':
+                            # Order attempted but no payment records - likely failed
+                            booking.payment_status = "failed"
+                            await db.commit()
+                            await db.refresh(booking)
+                            print(f"❌ Updated booking {booking.id} to FAILED (attempted but no payments)")
+                        else:
+                            print(f"⏳ Booking {booking.id} still PENDING (status: {razorpay_status})")
+                    except Exception as payment_error:
+                        print(f"⚠️ Could not fetch payment details: {str(payment_error)}")
         except Exception as e:
-            # If Razorpay API fails, keep current status
             print(f"⚠️ Failed to fetch Razorpay order status: {str(e)}")
             pass
     
