@@ -1,9 +1,15 @@
 # app/models.py
 from datetime import datetime
+import pytz
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Table, and_
 from sqlalchemy.orm import relationship, declarative_base, foreign
 
 Base = declarative_base()
+
+# Helper function to get current IST time
+def get_ist_now():
+    ist = pytz.timezone('Asia/Kolkata')
+    return datetime.now(ist)
 
 # Association table for many-to-many relationship between Doctor and Hospital
 doctor_hospital_association = Table('doctor_hospital_association', Base.metadata,
@@ -245,7 +251,7 @@ class PackageBooking(Base):
     razorpay_payment_id = Column(String(100), nullable=True)
     razorpay_signature = Column(String(200), nullable=True)
     payment_date = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_ist_now)
     
     # Relationship
     treatment = relationship("Treatment", lazy="noload")

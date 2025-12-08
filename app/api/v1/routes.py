@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import pytz
 import json
 import re
 import os
@@ -2144,7 +2145,9 @@ async def verify_razorpay_payment(
             booking.payment_status = "paid"
             booking.razorpay_payment_id = payment_data.razorpay_payment_id
             booking.razorpay_signature = payment_data.razorpay_signature
-            booking.payment_date = datetime.utcnow()
+            # Store payment date in IST
+            ist = pytz.timezone('Asia/Kolkata')
+            booking.payment_date = datetime.now(ist)
             
             await db.commit()
             await db.refresh(booking)
