@@ -92,13 +92,22 @@
                 <label for="to_date" class="form-label">To Date</label>
                 <input type="date" name="to_date" id="to_date" class="form-control" value="{{ to_date or '' }}">
             </div>
-            <div class="col-lg-4 col-md-6">
+            <div class="col-lg-2 col-md-3">
+                <label for="payment_status" class="form-label">Payment Status</label>
+                <select name="payment_status" id="payment_status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="pending" {% if payment_status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="paid" {% if payment_status == 'paid' %}selected{% endif %}>Paid</option>
+                    <option value="failed" {% if payment_status == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            <div class="col-lg-3 col-md-6">
                 <label for="search" class="form-label">Search Treatment</label>
                 <input type="text" name="search" id="search" class="form-control"
                     placeholder="Search by treatment, type, or 'online consultancy'..." value="{{ search }}">
                 <div class="form-text">Search for specific treatments by name, medical type, or 'online consultancy'</div>
             </div>
-            <div class="col-lg-4 col-md-12">
+            <div class="col-lg-3 col-md-12">
                 <label class="form-label d-none d-lg-block">&nbsp;</label>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     <button type="submit" class="btn btn-primary">
@@ -265,7 +274,7 @@
                 {% if page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="?page={{ page - 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
+                        href="?page={{ page - 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if payment_status %}&payment_status={{ payment_status }}{% endif %}">
                         <i class="fas fa-chevron-left"></i>
                     </a>
                 </li>
@@ -278,7 +287,7 @@
                 </li>
                 {% elif p <= 3 or p> total_pages - 3 or (p >= page - 2 and p <= page + 2) %} <li class="page-item">
                         <a class="page-link"
-                            href="?page={{ p }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">{{
+                            href="?page={{ p }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if payment_status %}&payment_status={{ payment_status }}{% endif %}">{{
                             p }}</a>
                         </li>
                         {% elif p == 4 or p == total_pages - 3 %}
@@ -290,7 +299,7 @@
 
                         {% if page < total_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="?page={{ page + 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}">
+                                href="?page={{ page + 1 }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if payment_status %}&payment_status={{ payment_status }}{% endif %}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                             </li>

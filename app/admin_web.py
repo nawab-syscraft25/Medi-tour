@@ -1363,6 +1363,7 @@ async def admin_bookings(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     search: Optional[str] = None,
+    payment_status: Optional[str] = None,
     export: Optional[str] = None,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -1422,6 +1423,10 @@ async def admin_bookings(
             ))
         )
     
+    # Apply payment status filter
+    if payment_status and payment_status.strip():
+        query = query.where(PackageBooking.payment_status == payment_status.strip())
+    
     # Add ordering and pagination
     query = query.order_by(desc(PackageBooking.created_at)).offset(offset).limit(limit)
     
@@ -1457,6 +1462,8 @@ async def admin_bookings(
                     ).self_group()
                 ))
             )
+        if payment_status and payment_status.strip():
+            export_query = export_query.where(PackageBooking.payment_status == payment_status.strip())
         
         export_query = export_query.order_by(desc(PackageBooking.created_at))
         export_result = await db.execute(export_query)
@@ -1534,6 +1541,8 @@ async def admin_bookings(
                 ).self_group()
             ))
         )
+    if payment_status and payment_status.strip():
+        count_query = count_query.where(PackageBooking.payment_status == payment_status.strip())
     
     total = await db.scalar(count_query)
     total_pages = (total + limit - 1) // limit
@@ -1564,6 +1573,7 @@ async def admin_bookings(
         "from_date": from_date,
         "to_date": to_date,
         "search": search or "",
+        "payment_status": payment_status or "",
         "total_bookings": total_bookings,
         "week_bookings": week_bookings,
         "month_bookings": month_bookings
