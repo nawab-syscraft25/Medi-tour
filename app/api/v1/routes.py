@@ -735,7 +735,6 @@ async def global_search(
             models.Doctor.skills.ilike(search_term),
             models.Doctor.location.ilike(search_term),
             models.Doctor.short_description.ilike(search_term),
-            models.Doctor.long_description.ilike(search_term)
         )
     ).where(models.Doctor.is_active == True).limit(limit)
     
@@ -745,7 +744,6 @@ async def global_search(
             models.Treatment.name.ilike(search_term),
             models.Treatment.treatment_type.ilike(search_term),
             models.Treatment.short_description.ilike(search_term),
-            models.Treatment.long_description.ilike(search_term),
             models.Treatment.location.ilike(search_term),
             models.Treatment.features.ilike(search_term)
         )
