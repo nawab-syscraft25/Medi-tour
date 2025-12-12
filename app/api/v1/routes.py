@@ -745,7 +745,7 @@ async def global_search(
             models.Treatment.treatment_type.ilike(search_term),
             models.Treatment.short_description.ilike(search_term),
             models.Treatment.location.ilike(search_term),
-            models.Treatment.features.ilike(search_term)
+            # models.Treatment.features.ilike(search_term)
         )
     ).limit(limit)
     
