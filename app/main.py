@@ -11,6 +11,7 @@ from app.db import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app import models
+from app.utils.static_files import CachedStaticFiles, MediaStaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -126,14 +127,15 @@ from app.admin_web import router as admin_router
 
 app.include_router(admin_router)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files with caching
+app.mount("/static", CachedStaticFiles(directory="static"), name="static")
+print("📂 Mounted static files at /static with caching enabled")
 
-# Serve static files for local development
-if settings.debug:
-    # Mount media directory for serving uploaded files
-    app.mount("/media", StaticFiles(directory="media"), name="media")
-    print("📂 Mounted media files at /media")
+# Mount media directory for serving uploaded files with aggressive caching
+# Note: Media files benefit from long cache times since they're typically
+# immutable (identified by unique filenames/UUIDs)
+app.mount("/media", MediaStaticFiles(directory="media"), name="media")
+print("📂 Mounted media files at /media with caching enabled (1 year TTL)")
 
 
 # Additional middleware for request logging (debug mode only)
