@@ -943,6 +943,13 @@ async def admin_treatments(
         "ayushman": ayushman
     })
 
+
+@router.get('/admin/api/featured-treatments-count')
+async def featured_treatments_count(admin: dict = Depends(require_admin_login), db: AsyncSession = Depends(get_db)):
+    """Return count of treatments marked as featured (for client-side validation)."""
+    count = await db.scalar(select(func.count(Treatment.id)).where(Treatment.is_featured == True))
+    return {"count": int(count or 0)}
+
 # Offers Management (Attractions / Discount Packages)
 @router.get("/admin/offers", response_class=HTMLResponse)
 async def admin_offers(

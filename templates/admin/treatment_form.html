@@ -260,7 +260,7 @@
                                 <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="true" 
                                        {% if treatment and treatment.is_featured %}checked{% endif %}>
                                 <label class="form-check-label" for="is_featured">
-                                    <i class="fas fa-star text-warning"></i> Featured Treatment
+                                    <i class="fas fa-star text-warning"></i> Featured Treatment 
                                 </label>
                                 <div class="form-text">Featured treatments will be highlighted and shown prominently on the homepage.</div>
                             </div>
@@ -532,6 +532,8 @@
 // Global variables
 const TREATMENT_ID = {% if treatment and treatment.id %}{{ treatment.id }}{% else %}null{% endif %};
 console.log('TREATMENT_ID initialized:', TREATMENT_ID, typeof TREATMENT_ID);
+const CURRENT_IS_FEATURED = {% if treatment and treatment.is_featured %}true{% else %}false{% endif %};
+console.log('CURRENT_IS_FEATURED:', CURRENT_IS_FEATURED);
 
 // Simple global functions
 function deleteImageById(imageId) {
@@ -620,6 +622,40 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+});
+
+// Warn/prevent when trying to mark as featured if limit reached
+document.addEventListener('DOMContentLoaded', function() {
+    const chk = document.getElementById('is_featured');
+    if (!chk) return;
+
+    chk.addEventListener('change', async function(e) {
+        // If unchecking, always allow
+        if (!this.checked) return;
+
+        // If this treatment is already featured, allow toggle
+        if (CURRENT_IS_FEATURED) return;
+
+        try {
+            const resp = await fetch('/admin/api/featured-treatments-count');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const count = parseInt(data.count || 0, 10);
+            if (count >= 4) {
+                // Revert checkbox and show modal warning
+                this.checked = false;
+                const modalEl = document.getElementById('featuredLimitModal');
+                if (modalEl) {
+                    const modal = new bootstrap.Modal(modalEl);
+                    modal.show();
+                } else {
+                    alert('Only 4 treatments can be featured at a time. Please unfeature another treatment first.');
+                }
+            }
+        } catch (err) {
+            console.error('Error checking featured count', err);
+        }
+    });
 });
 
 // Treatment Type Management Functions
@@ -850,4 +886,23 @@ function removeFAQRow(button) {
     }
 }
 </script>
+
+<!-- Featured limit modal -->
+<div class="modal fade" id="featuredLimitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Featured Limit Reached</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">You cannot mark this treatment as featured because there are already 4 featured treatments.</p>
+                <p class="small text-muted">Please unfeature one of the existing featured treatments before marking a new one.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

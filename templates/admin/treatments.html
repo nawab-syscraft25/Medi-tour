@@ -65,6 +65,9 @@
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="fas fa-search"></i></span>
                                 <input type="text" class="form-control" placeholder="Search..." id="searchInput">
+                                <button class="btn btn-outline-secondary" type="button" title="Search all treatments" onclick="performServerSearch()">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
                             </div>
                         </div>
                         <div class="col-12 col-sm-6 col-md-3 col-lg-2">
@@ -321,7 +324,58 @@ document.addEventListener('DOMContentLoaded', function() {
     populateFilterOptions();
     setupFilterListeners();
     setupDeleteHandlers();
+    populateSearchFromQuery(); // populate search box from URL query
 });
+
+// If user presses Enter in the search box, perform a server-side query
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performServerSearch();
+            }
+        });
+    }
+});
+
+// Read `search` param from URL and populate the search input
+function populateSearchFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const search = params.get('search');
+    if (search) {
+        const input = document.getElementById('searchInput');
+        if (input) input.value = search;
+    }
+}
+
+// Build URL with current filters and navigate to server-side search
+function performServerSearch() {
+    const searchTerm = document.getElementById('searchInput').value;
+    const typeFilter = document.getElementById('typeFilter').value;
+    const hospitalFilter = document.getElementById('hospitalFilter').value;
+    const doctorFilter = document.getElementById('doctorFilter').value;
+    const priceFilter = document.getElementById('priceFilter') ? document.getElementById('priceFilter').value : '';
+    const ratingFilter = document.getElementById('ratingFilter') ? document.getElementById('ratingFilter').value : '';
+    const locationFilter = document.getElementById('locationFilter') ? document.getElementById('locationFilter').value : '';
+    const ayushmanFilter = document.getElementById('ayushmanFilter') ? document.getElementById('ayushmanFilter').value : '';
+
+    const params = new URLSearchParams();
+    if (searchTerm) params.append('search', searchTerm);
+    if (typeFilter) params.append('type', typeFilter);
+    if (hospitalFilter) params.append('hospital', hospitalFilter);
+    if (doctorFilter) params.append('doctor', doctorFilter);
+    if (priceFilter) params.append('price', priceFilter);
+    if (ratingFilter) params.append('rating', ratingFilter);
+    if (locationFilter) params.append('location', locationFilter);
+    if (ayushmanFilter) params.append('ayushman', ayushmanFilter);
+
+    // Reset to first page when doing a new server search
+    const baseUrl = window.location.pathname;
+    const url = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
+    window.location.href = url;
+}
 
 // Setup event listeners for all filters
 function setupFilterListeners() {
