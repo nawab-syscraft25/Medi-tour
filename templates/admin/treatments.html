@@ -411,12 +411,16 @@ function performServerSearch() {
 // Setup event listeners for all filters
 function setupFilterListeners() {
     document.getElementById('searchInput').addEventListener('input', filterTreatments);
-    document.getElementById('typeFilter').addEventListener('change', filterTreatments);
-    document.getElementById('hospitalFilter').addEventListener('change', filterTreatments);
-    document.getElementById('doctorFilter').addEventListener('change', filterTreatments);
+    const typeEl = document.getElementById('typeFilter');
+    if (typeEl) typeEl.addEventListener('change', performServerSearch);
+    const hospitalEl = document.getElementById('hospitalFilter');
+    if (hospitalEl) hospitalEl.addEventListener('change', performServerSearch);
+    const doctorEl = document.getElementById('doctorFilter');
+    if (doctorEl) doctorEl.addEventListener('change', performServerSearch);
     document.getElementById('priceFilter').addEventListener('change', filterTreatments);
     document.getElementById('ratingFilter').addEventListener('change', filterTreatments);
-    document.getElementById('locationFilter').addEventListener('change', filterTreatments);
+    const locationEl = document.getElementById('locationFilter');
+    if (locationEl) locationEl.addEventListener('change', performServerSearch);
     document.getElementById('ayushmanFilter').addEventListener('change', filterTreatments);
     const isActiveEl = document.getElementById('isActiveFilter');
     if (isActiveEl) isActiveEl.addEventListener('change', function() { performServerSearch(); });
@@ -428,6 +432,26 @@ function setupFilterListeners() {
 function populateFilterOptions() {
     // Try to load full filter lists from the API (covers all treatments)
     (async () => {
+        // capture query params to restore selected values after population
+        const params = new URLSearchParams(window.location.search);
+        const selectedTypeParam = params.get('type');
+        const selectedHospitalParam = params.get('hospital');
+        const selectedDoctorParam = params.get('doctor');
+        const selectedLocationParam = params.get('location');
+
+        function setSelectValueCaseInsensitive(selectEl, value) {
+            if (!value || !selectEl) return;
+            // direct set first
+            try { selectEl.value = value; if (selectEl.value === value) return; } catch (e) {}
+            // fallback: match ignoring case
+            const lower = value.toString().toLowerCase();
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if ((selectEl.options[i].value || '').toString().toLowerCase() === lower) {
+                    selectEl.selectedIndex = i;
+                    return;
+                }
+            }
+        }
         try {
             const [typesResp, locationsResp, hospitalsResp, doctorsResp] = await Promise.all([
                 fetch('/api/v1/filters/treatment-types'),
@@ -456,6 +480,9 @@ function populateFilterOptions() {
                 typeFilter.appendChild(option);
             });
 
+            // restore selected type from query if present
+            setSelectValueCaseInsensitive(typeFilter, selectedTypeParam);
+
             // Populate location filter
             const locationFilter = document.getElementById('locationFilter');
             Array.from(locationFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
@@ -465,6 +492,9 @@ function populateFilterOptions() {
                 option.textContent = loc.charAt(0).toUpperCase() + loc.slice(1);
                 locationFilter.appendChild(option);
             });
+
+            // restore selected location from query if present
+            setSelectValueCaseInsensitive(locationFilter, selectedLocationParam);
 
             // Populate hospital filter (use names)
             const hospitalFilter = document.getElementById('hospitalFilter');
@@ -482,6 +512,9 @@ function populateFilterOptions() {
                 hospitalFilter.appendChild(option);
             });
 
+            // restore selected hospital from query if present
+            setSelectValueCaseInsensitive(hospitalFilter, selectedHospitalParam);
+
             // Populate doctor filter (use names)
             const doctorFilter = document.getElementById('doctorFilter');
             Array.from(doctorFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
@@ -496,6 +529,9 @@ function populateFilterOptions() {
                 option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
                 doctorFilter.appendChild(option);
             });
+
+            // restore selected doctor from query if present
+            setSelectValueCaseInsensitive(doctorFilter, selectedDoctorParam);
 
             return;
         } catch (err) {
@@ -683,7 +719,8 @@ function clearFilters() {
     document.getElementById('ratingFilter').value = '';
     document.getElementById('locationFilter').value = '';
     document.getElementById('ayushmanFilter').value = '';
-    filterTreatments();
+    // After clearing inputs, perform a server-side search (will navigate to base URL without queryparams)
+    performServerSearch();
 }
 
 // Export treatments with current filters
