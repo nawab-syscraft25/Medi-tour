@@ -1686,6 +1686,52 @@ async def get_treatments(
     return treatment_dicts
 
 
+
+
+
+@router.get("/treatments/featured")
+async def get_featured_treatments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """Return featured treatments with minimal fields: id, name, descriptions and images."""
+    query = select(models.Treatment).where(models.Treatment.is_featured == True)
+    query = query.order_by(models.Treatment.created_at.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(query)
+    treatments = result.scalars().all()
+
+    featured = []
+    for t in treatments:
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == t.id,
+                    models.Image.owner_type == 'treatment'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+
+        featured.append({
+            "id": t.id,
+            "name": t.name,
+            "short_description": t.short_description,
+            "long_description": t.long_description,
+            "images": [
+                {
+                    "id": img.id,
+                    "url": img.url,
+                    "is_primary": img.is_primary,
+                    "position": img.position
+                } for img in images
+            ]
+        })
+
+    return featured
+
+
 @router.get("/treatments/{treatment_id}", response_model=schemas.TreatmentResponse)
 async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Treatment).where(models.Treatment.id == treatment_id))
@@ -1795,6 +1841,49 @@ async def get_treatment(treatment_id: int, db: AsyncSession = Depends(get_db)):
     return treatment_dict
 
 
+
+@router.get("/treatments/featured")
+async def get_featured_treatments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """Return featured treatments with minimal fields: id, name, descriptions and images."""
+    query = select(models.Treatment).where(models.Treatment.is_featured == True)
+    query = query.order_by(models.Treatment.created_at.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(query)
+    treatments = result.scalars().all()
+
+    featured = []
+    for t in treatments:
+        images_result = await db.execute(
+            select(models.Image).where(
+                and_(
+                    models.Image.owner_id == t.id,
+                    models.Image.owner_type == 'treatment'
+                )
+            ).order_by(models.Image.position)
+        )
+        images = images_result.scalars().all()
+
+        featured.append({
+            "id": t.id,
+            "name": t.name,
+            "short_description": t.short_description,
+            "long_description": t.long_description,
+            "images": [
+                {
+                    "id": img.id,
+                    "url": img.url,
+                    "is_primary": img.is_primary,
+                    "position": img.position
+                } for img in images
+            ]
+        })
+
+    return featured
+    
 @router.put("/treatments/{treatment_id}", response_model=schemas.TreatmentResponse)
 async def update_treatment(
     treatment_id: int,
