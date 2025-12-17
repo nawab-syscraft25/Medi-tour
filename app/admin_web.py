@@ -755,6 +755,8 @@ async def admin_treatments(
     rating: Optional[float] = None,
     location: Optional[str] = None,
     ayushman: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    is_featured: Optional[bool] = None,
     export: Optional[bool] = False,
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
@@ -851,6 +853,12 @@ async def admin_treatments(
         
         if 'price_condition' in locals():
             conditions.append(price_condition)
+
+    # Boolean filters from query params
+    if is_active is not None and hasattr(Treatment, 'is_active'):
+        conditions.append(Treatment.is_active == is_active)
+    if is_featured is not None and hasattr(Treatment, 'is_featured'):
+        conditions.append(Treatment.is_featured == is_featured)
     
     # Apply all conditions
     if conditions:
@@ -940,7 +948,9 @@ async def admin_treatments(
         "price": price,
         "rating": rating,
         "location": location,
-        "ayushman": ayushman
+        "ayushman": ayushman,
+        "is_active": is_active,
+        "is_featured": is_featured
     })
 
 

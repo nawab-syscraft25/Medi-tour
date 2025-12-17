@@ -1539,6 +1539,8 @@ async def get_treatments(
     doctor_id: Optional[int] = Query(None),
     price_min: Optional[float] = Query(None),
     price_max: Optional[float] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    is_featured: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(models.Treatment)
@@ -1569,6 +1571,11 @@ async def get_treatments(
             models.Treatment.price_exact <= price_max,
             models.Treatment.price_max <= price_max
         ))
+    # Boolean filters (only if model has these attributes)
+    if is_active is not None and hasattr(models.Treatment, 'is_active'):
+        filters.append(models.Treatment.is_active == is_active)
+    if is_featured is not None and hasattr(models.Treatment, 'is_featured'):
+        filters.append(models.Treatment.is_featured == is_featured)
     
     if filters:
         query = query.where(and_(*filters))

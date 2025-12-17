@@ -122,6 +122,20 @@
                             </select>
                         </div>
                         <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                            <select class="form-select form-select-sm" id="isActiveFilter">
+                                <option value="">All Status</option>
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                            <select class="form-select form-select-sm" id="isFeaturedFilter">
+                                <option value="">Featured Status</option>
+                                    <option value="true">Featured</option>
+                                    <option value="false">Not Featured</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-md-3 col-lg-2">
                             <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearFilters()" title="Clear all filters">
                                 <i class="fas fa-times me-1"></i>Clear
                             </button>
@@ -151,6 +165,8 @@
                                     data-hospital="{{ treatment.hospital.name|lower if treatment.hospital else (treatment.other_hospital_name|lower if treatment.other_hospital_name else '') }}"
                                     data-doctor="{{ treatment.doctor.name|lower if treatment.doctor else (treatment.other_doctor_name|lower if treatment.other_doctor_name else '') }}"
                                     data-location="{{ treatment.location|lower if treatment.location else '' }}"
+                                    data-is-active="{{ 'true' if treatment.is_active else 'false' }}"
+                                    data-is-featured="{{ 'true' if treatment.is_featured else 'false' }}"
                                     data-price-exact="{{ treatment.price_exact if treatment.price_exact else 0 }}"
                                     data-price-min="{{ treatment.price_min if treatment.price_min else 0 }}"
                                     data-price-max="{{ treatment.price_max if treatment.price_max else 0 }}"
@@ -348,6 +364,17 @@ function populateSearchFromQuery() {
         const input = document.getElementById('searchInput');
         if (input) input.value = search;
     }
+    // populate new boolean filters from query
+    const isActive = params.get('is_active');
+    const isFeatured = params.get('is_featured');
+    if (isActive) {
+        const el = document.getElementById('isActiveFilter');
+        if (el) el.value = isActive;
+    }
+    if (isFeatured) {
+        const el = document.getElementById('isFeaturedFilter');
+        if (el) el.value = isFeatured;
+    }
 }
 
 // Build URL with current filters and navigate to server-side search
@@ -360,6 +387,8 @@ function performServerSearch() {
     const ratingFilter = document.getElementById('ratingFilter') ? document.getElementById('ratingFilter').value : '';
     const locationFilter = document.getElementById('locationFilter') ? document.getElementById('locationFilter').value : '';
     const ayushmanFilter = document.getElementById('ayushmanFilter') ? document.getElementById('ayushmanFilter').value : '';
+    const isActiveFilter = document.getElementById('isActiveFilter') ? document.getElementById('isActiveFilter').value : '';
+    const isFeaturedFilter = document.getElementById('isFeaturedFilter') ? document.getElementById('isFeaturedFilter').value : '';
 
     const params = new URLSearchParams();
     if (searchTerm) params.append('search', searchTerm);
@@ -370,6 +399,8 @@ function performServerSearch() {
     if (ratingFilter) params.append('rating', ratingFilter);
     if (locationFilter) params.append('location', locationFilter);
     if (ayushmanFilter) params.append('ayushman', ayushmanFilter);
+    if (isActiveFilter) params.append('is_active', isActiveFilter);
+    if (isFeaturedFilter) params.append('is_featured', isFeaturedFilter);
 
     // Reset to first page when doing a new server search
     const baseUrl = window.location.pathname;
@@ -387,81 +418,149 @@ function setupFilterListeners() {
     document.getElementById('ratingFilter').addEventListener('change', filterTreatments);
     document.getElementById('locationFilter').addEventListener('change', filterTreatments);
     document.getElementById('ayushmanFilter').addEventListener('change', filterTreatments);
+    const isActiveEl = document.getElementById('isActiveFilter');
+    if (isActiveEl) isActiveEl.addEventListener('change', function() { performServerSearch(); });
+    const isFeaturedEl = document.getElementById('isFeaturedFilter');
+    if (isFeaturedEl) isFeaturedEl.addEventListener('change', function() { performServerSearch(); });
 }
 
 // Populate filter dropdown options from existing data
 function populateFilterOptions() {
-    const rows = document.querySelectorAll('tbody tr');
-    const types = new Set();
-    const hospitals = new Set();
-    const doctors = new Set();
-    const locations = new Set();
-    
-    rows.forEach(row => {
-        // Get treatment type
-        const type = row.dataset.type;
-        if (type && type.trim()) {
-            types.add(type.trim());
+    // Try to load full filter lists from the API (covers all treatments)
+    (async () => {
+        try {
+            const [typesResp, locationsResp, hospitalsResp, doctorsResp] = await Promise.all([
+                fetch('/api/v1/filters/treatment-types'),
+                fetch('/api/v1/filters/locations'),
+                fetch('/api/v1/hospitals?limit=1000'),
+                fetch('/api/v1/doctors?limit=1000')
+            ]);
+
+            if (!typesResp.ok || !locationsResp.ok || !hospitalsResp.ok || !doctorsResp.ok) {
+                throw new Error('One or more filter endpoints failed');
+            }
+
+            const types = await typesResp.json();
+            const locations = await locationsResp.json();
+            const hospitals = await hospitalsResp.json();
+            const doctors = await doctorsResp.json();
+
+            // Populate type filter
+            const typeFilter = document.getElementById('typeFilter');
+            // remove existing dynamic options
+            Array.from(typeFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
+            types.sort().forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                typeFilter.appendChild(option);
+            });
+
+            // Populate location filter
+            const locationFilter = document.getElementById('locationFilter');
+            Array.from(locationFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
+            locations.sort().forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc.charAt(0).toUpperCase() + loc.slice(1);
+                locationFilter.appendChild(option);
+            });
+
+            // Populate hospital filter (use names)
+            const hospitalFilter = document.getElementById('hospitalFilter');
+            Array.from(hospitalFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
+            // hospitals may be objects; try to extract name
+            hospitals.sort((a,b) => {
+                const na = (a.name||a).toString().toLowerCase();
+                const nb = (b.name||b).toString().toLowerCase();
+                return na < nb ? -1 : na > nb ? 1 : 0;
+            }).forEach(h => {
+                const name = (h.name || h).toString();
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+                hospitalFilter.appendChild(option);
+            });
+
+            // Populate doctor filter (use names)
+            const doctorFilter = document.getElementById('doctorFilter');
+            Array.from(doctorFilter.querySelectorAll('option:not(:first-child)')).forEach(n => n.remove());
+            doctors.sort((a,b) => {
+                const na = (a.name||a).toString().toLowerCase();
+                const nb = (b.name||b).toString().toLowerCase();
+                return na < nb ? -1 : na > nb ? 1 : 0;
+            }).forEach(d => {
+                const name = (d.name || d).toString();
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+                doctorFilter.appendChild(option);
+            });
+
+            return;
+        } catch (err) {
+            console.warn('Falling back to page-based filter population:', err);
+            // fallback to current-page population below
         }
         
-        // Get hospital
-        const hospital = row.dataset.hospital;
-        if (hospital && hospital.trim()) {
-            hospitals.add(hospital.trim());
-        }
+        // Fallback: populate from current page rows (keeps previous behavior if API unavailable)
+        const rows = document.querySelectorAll('tbody tr');
+        const typesSet = new Set();
+        const hospitalsSet = new Set();
+        const doctorsSet = new Set();
+        const locationsSet = new Set();
         
-        // Get doctor
-        const doctor = row.dataset.doctor;
-        if (doctor && doctor.trim()) {
-            doctors.add(doctor.trim());
-        }
-        
-        // Get location
-        const location = row.dataset.location;
-        if (location && location.trim()) {
-            locations.add(location.trim());
-        }
-    });
-    
-    // Populate type filter
-    const typeFilter = document.getElementById('typeFilter');
-    const sortedTypes = Array.from(types).sort();
-    sortedTypes.forEach(type => {
-        const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-        typeFilter.appendChild(option);
-    });
-    
-    // Populate hospital filter
-    const hospitalFilter = document.getElementById('hospitalFilter');
-    const sortedHospitals = Array.from(hospitals).sort();
-    sortedHospitals.forEach(hospital => {
-        const option = document.createElement('option');
-        option.value = hospital;
-        option.textContent = hospital.charAt(0).toUpperCase() + hospital.slice(1);
-        hospitalFilter.appendChild(option);
-    });
-    
-    // Populate doctor filter
-    const doctorFilter = document.getElementById('doctorFilter');
-    const sortedDoctors = Array.from(doctors).sort();
-    sortedDoctors.forEach(doctor => {
-        const option = document.createElement('option');
-        option.value = doctor;
-        option.textContent = doctor.charAt(0).toUpperCase() + doctor.slice(1);
-        doctorFilter.appendChild(option);
-    });
-    
-    // Populate location filter
-    const locationFilter = document.getElementById('locationFilter');
-    const sortedLocations = Array.from(locations).sort();
-    sortedLocations.forEach(location => {
-        const option = document.createElement('option');
-        option.value = location;
-        option.textContent = location.charAt(0).toUpperCase() + location.slice(1);
-        locationFilter.appendChild(option);
-    });
+        rows.forEach(row => {
+            const type = row.dataset.type;
+            if (type && type.trim()) typesSet.add(type.trim());
+            const hospital = row.dataset.hospital;
+            if (hospital && hospital.trim()) hospitalsSet.add(hospital.trim());
+            const doctor = row.dataset.doctor;
+            if (doctor && doctor.trim()) doctorsSet.add(doctor.trim());
+            const location = row.dataset.location;
+            if (location && location.trim()) locationsSet.add(location.trim());
+        });
+
+        // Populate type filter
+        const typeFilter = document.getElementById('typeFilter');
+        const sortedTypes = Array.from(typesSet).sort();
+        sortedTypes.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+            typeFilter.appendChild(option);
+        });
+
+        // Populate hospital filter
+        const hospitalFilter = document.getElementById('hospitalFilter');
+        const sortedHospitals = Array.from(hospitalsSet).sort();
+        sortedHospitals.forEach(hospital => {
+            const option = document.createElement('option');
+            option.value = hospital;
+            option.textContent = hospital.charAt(0).toUpperCase() + hospital.slice(1);
+            hospitalFilter.appendChild(option);
+        });
+
+        // Populate doctor filter
+        const doctorFilter = document.getElementById('doctorFilter');
+        const sortedDoctors = Array.from(doctorsSet).sort();
+        sortedDoctors.forEach(doctor => {
+            const option = document.createElement('option');
+            option.value = doctor;
+            option.textContent = doctor.charAt(0).toUpperCase() + doctor.slice(1);
+            doctorFilter.appendChild(option);
+        });
+
+        // Populate location filter
+        const locationFilter = document.getElementById('locationFilter');
+        const sortedLocations = Array.from(locationsSet).sort();
+        sortedLocations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            option.textContent = location.charAt(0).toUpperCase() + location.slice(1);
+            locationFilter.appendChild(option);
+        });
+    })();
 }
 
 // Main filtering function
@@ -474,6 +573,8 @@ function filterTreatments() {
     const ratingFilter = document.getElementById('ratingFilter').value;
     const locationFilter = document.getElementById('locationFilter').value.toLowerCase();
     const ayushmanFilter = document.getElementById('ayushmanFilter').value;
+    const isActiveFilter = document.getElementById('isActiveFilter') ? document.getElementById('isActiveFilter').value : '';
+    const isFeaturedFilter = document.getElementById('isFeaturedFilter') ? document.getElementById('isFeaturedFilter').value : '';
     
     const rows = document.querySelectorAll('tbody tr');
     let visibleCount = 0;
@@ -490,6 +591,8 @@ function filterTreatments() {
         const priceMax = parseFloat(row.dataset.priceMax || '0');
         const rating = parseFloat(row.dataset.rating || '0');
         const isAyushman = row.dataset.isAyushman === 'true';
+        const isActive = row.dataset.isActive === 'true';
+        const isFeatured = row.dataset.isFeatured === 'true';
         
         // Check all filter conditions
         const matchesSearch = !searchTerm || 
@@ -537,10 +640,26 @@ function filterTreatments() {
                 matchesAyushman = !isAyushman;
             }
         }
+
+        // is_active filtering logic (accept both 'true'/'false' and legacy 'active'/'inactive')
+        let matchesIsActive = true;
+        const isActiveFilterVal = document.getElementById('isActiveFilter') ? document.getElementById('isActiveFilter').value : '';
+        if (isActiveFilterVal) {
+            if (isActiveFilterVal === 'active' || isActiveFilterVal === 'true') matchesIsActive = isActive;
+            else if (isActiveFilterVal === 'inactive' || isActiveFilterVal === 'false') matchesIsActive = !isActive;
+        }
+
+        // is_featured filtering logic (accept both 'true'/'false' and legacy 'featured'/'not-featured')
+        let matchesIsFeatured = true;
+        const isFeaturedFilterVal2 = document.getElementById('isFeaturedFilter') ? document.getElementById('isFeaturedFilter').value : '';
+        if (isFeaturedFilterVal2) {
+            if (isFeaturedFilterVal2 === 'featured' || isFeaturedFilterVal2 === 'true') matchesIsFeatured = isFeatured;
+            else if (isFeaturedFilterVal2 === 'not-featured' || isFeaturedFilterVal2 === 'false') matchesIsFeatured = !isFeatured;
+        }
         
         // Show/hide row based on all filters
         if (matchesSearch && matchesType && matchesHospital && matchesDoctor && 
-            matchesLocation && matchesPrice && matchesRating && matchesAyushman) {
+            matchesLocation && matchesPrice && matchesRating && matchesAyushman && matchesIsActive && matchesIsFeatured) {
             row.style.display = '';
             visibleCount++;
         } else {
@@ -558,6 +677,8 @@ function clearFilters() {
     document.getElementById('typeFilter').value = '';
     document.getElementById('hospitalFilter').value = '';
     document.getElementById('doctorFilter').value = '';
+    const isActiveEl = document.getElementById('isActiveFilter'); if (isActiveEl) isActiveEl.value = '';
+    const isFeaturedEl = document.getElementById('isFeaturedFilter'); if (isFeaturedEl) isFeaturedEl.value = '';
     document.getElementById('priceFilter').value = '';
     document.getElementById('ratingFilter').value = '';
     document.getElementById('locationFilter').value = '';
@@ -597,6 +718,8 @@ function exportTreatments() {
     if (ratingFilter) params.append('rating', ratingFilter);
     if (locationFilter) params.append('location', locationFilter);
     if (ayushmanFilter) params.append('ayushman', ayushmanFilter);
+    if (isActiveFilter) params.append('is_active', isActiveFilter);
+    if (isFeaturedFilter) params.append('is_featured', isFeaturedFilter);
     
     // Create the full URL for export
     const baseUrl = window.location.href.split('?')[0]; // Get base URL without query params
