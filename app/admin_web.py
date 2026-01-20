@@ -3279,6 +3279,13 @@ async def admin_doctor_update(
         if delete_profile_photo:
             print(f"Deleting profile photo for doctor {doctor_id}")
             doctor.profile_photo = None
+            # If the request is AJAX, commit and return JSON so client-side JS can handle it
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                return JSONResponse({"success": False, "message": "Failed to delete profile photo"})
+            return JSONResponse({"success": True, "message": "Profile photo deleted successfully"})
         
         # Handle profile photo update
         if profile_photo and profile_photo.filename:

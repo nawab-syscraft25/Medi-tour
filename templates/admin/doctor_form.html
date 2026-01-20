@@ -980,11 +980,18 @@ function deleteDoctorImage(imageId) {
     fetch(targetUrl, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
         body: formData
     })
-    .then(response => {
-        console.log('Response status:', response.status);
-        return response.json();
+    .then(async response => {
+        const ct = response.headers.get('content-type') || '';
+        console.log('Response status:', response.status, 'content-type:', ct);
+        if (ct.includes('application/json')) {
+            return response.json();
+        }
+        // If server returned HTML or plain text, surface it as an error
+        const text = await response.text();
+        throw new Error('Non-JSON response: ' + text);
     })
     .then(data => {
         console.log('Response data:', data);
@@ -1016,11 +1023,17 @@ function deleteProfilePhoto() {
     fetch(targetUrl, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
         body: formData
     })
-    .then(response => {
-        console.log('Profile photo delete response status:', response.status);
-        return response.json();
+    .then(async response => {
+        const ct = response.headers.get('content-type') || '';
+        console.log('Profile photo delete response status:', response.status, 'content-type:', ct);
+        if (ct.includes('application/json')) {
+            return response.json();
+        }
+        const text = await response.text();
+        throw new Error('Non-JSON response: ' + text);
     })
     .then(data => {
         console.log('Profile photo delete response data:', data);
@@ -1068,6 +1081,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(window.location.href.replace('/edit', ''), {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
                 body: formData
             })
             .then(response => response.json())

@@ -126,7 +126,6 @@ media/uploads/
 *.json
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
