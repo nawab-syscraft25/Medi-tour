@@ -5609,25 +5609,6 @@ async def admin_partner_update(
     return RedirectResponse(url="/admin/partners", status_code=302)
 
 
-@router.post("/admin/partners/{partner_id}/delete", response_class=HTMLResponse)
-async def admin_partner_delete(
-    request: Request,
-    partner_id: int,
-    session_token: Optional[str] = Cookie(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """New banner page"""
-    admin = await get_current_admin_dict(session_token, db)
-    if not admin:
-        return RedirectResponse(url="/admin", status_code=302)
-    
-    return render_template("admin/banner_form.html", {
-        "request": request,
-        "admin": admin,
-        "action": "Create"
-    })
-
-
 # DEPRECATED: This implementation is outdated and inconsistent
 # Use the form-based implementation at line 5157 instead
 @router.post("/admin/banners/new", response_class=HTMLResponse)
@@ -5903,26 +5884,6 @@ async def admin_partner_update(
     await db.refresh(partner)
     
     return RedirectResponse(url="/admin/partners", status_code=302)
-
-
-@router.post("/admin/partners/{partner_id}/delete", response_class=HTMLResponse)
-async def admin_partner_delete(
-    request: Request,
-    partner_id: int,
-    session_token: Optional[str] = Cookie(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """New banner form"""
-    admin = await get_current_admin_dict(session_token, db)
-    if not admin:
-        return RedirectResponse(url="/admin", status_code=302)
-    
-    return render_template("admin/banner_form.html", {
-        "request": request,
-        "admin": admin,
-        "action": "Create",
-        "banner": None
-    })
 
 
 @router.post("/admin/banners/new")

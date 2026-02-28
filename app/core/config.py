@@ -55,6 +55,7 @@ class Settings(BaseSettings):
         # Look for .env file in the project root directory
         env_file = Path(__file__).parent.parent.parent / ".env"
         env_file_encoding = 'utf-8'
+        case_sensitive = False
 
 
 settings = Settings()
