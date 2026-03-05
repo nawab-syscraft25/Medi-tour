@@ -5533,6 +5533,7 @@ async def admin_partner_new(
 @router.post("/admin/partners/new", response_class=HTMLResponse)
 async def admin_partner_create(
     request: Request,
+    logo_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -5542,12 +5543,20 @@ async def admin_partner_create(
         return RedirectResponse(url="/admin", status_code=302)
     
     form = await request.form()
+    # Build partner object from form values
     partner = PartnerHospital(
-        name=form["name"],
+        name=form.get("name", ""),
         logo_url=form.get("logo_url", ""),
     )
     if "hospital_id" in form and form["hospital_id"]:
         partner.hospital_id = int(form["hospital_id"])
+
+    # Handle uploaded logo file if provided
+    if logo_image and logo_image.filename:
+        filename = await save_uploaded_file(logo_image, "partner")
+        if filename:
+            partner.logo_url = f"/media/partner/{filename}"
+
     db.add(partner)
     await db.commit()
     await db.refresh(partner)
@@ -5582,6 +5591,7 @@ async def admin_partner_edit(
 async def admin_partner_update(
     request: Request,
     partner_id: int,
+    logo_image: UploadFile = File(default=None),
     session_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db)
 ):
@@ -5596,9 +5606,15 @@ async def admin_partner_update(
         return RedirectResponse(url="/admin/partners", status_code=302)
     
     partner.name = form.get("name", partner.name)
-    # Only update fields that exist in the PartnerHospital model
-    if "logo_url" in form:
+    # Handle logo uploads first (take precedence over any manual URL)
+    if logo_image and logo_image.filename:
+        filename = await save_uploaded_file(logo_image, "partner")
+        if filename:
+            partner.logo_url = f"/media/partner/{filename}"
+    elif "logo_url" in form:
+        # allow manual URL edit if provided
         partner.logo_url = form["logo_url"]
+
     if "hospital_id" in form and form["hospital_id"]:
         partner.hospital_id = int(form["hospital_id"])
     elif "hospital_id" in form and not form["hospital_id"]:
